@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vercel Account Brief — Netflix, Inc.</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#000000; --fg:#ededed; --fg-2:#b4b4b4;
+    --muted:#8f8f8f; --muted-2:#6e6e6e; --faint:#111111; --faint-2:#0a0a0a;
+    --card:#0c0c0c;
+    --border:#262626; --border-2:#343434; --border-3:#454545;
+    --blue:#3b9eff; --blue-bg:rgba(0,112,243,.14); --blue-border:rgba(59,158,255,.32);
+    --green:#4ec98a; --green-bg:rgba(45,160,100,.14); --green-border:rgba(78,201,138,.30);
+    --amber:#f5a623; --amber-bg:rgba(245,166,35,.13); --amber-border:rgba(245,166,35,.30);
+    --violet:#a899ff; --violet-bg:rgba(120,100,255,.15); --violet-border:rgba(168,153,255,.32);
+    --sans:'Geist','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --mono:'Geist Mono','SF Mono',ui-monospace,'Menlo',monospace;
+  }
+  html{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 96px}
+
+  /* NAV */
+  .nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+       margin:0 -28px 0;padding:12px 28px;background:rgba(0,0,0,.8);backdrop-filter:blur(8px);
+       border-bottom:1px solid var(--border)}
+  .nav .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;margin-right:14px;white-space:nowrap}
+  .nav .brand .tri{font-size:15px}
+  .nav .brand .sep{color:var(--border-3)}
+  .nav .brand .hg{color:var(--muted);font-weight:500}
+  .nav a{font-size:12.5px;color:var(--muted);text-decoration:none;padding:5px 9px;border-radius:6px;white-space:nowrap}
+  .nav a:hover{background:var(--faint);color:var(--fg)}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  section{scroll-margin-top:60px}
+
+  /* HEADER */
+  header.hero{padding:46px 0 34px;border-bottom:1px solid var(--border)}
+  .eyebrow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.02em;color:var(--muted);margin-bottom:20px;flex-wrap:wrap}
+  .eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--blue)}
+  h1.co{font-size:46px;font-weight:650;letter-spacing:-.03em;line-height:1.05;margin-bottom:8px}
+  .tagline{font-size:16px;color:var(--muted);margin-bottom:22px}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .badge{font-family:var(--mono);font-size:11.5px;font-weight:500;padding:4px 10px;border-radius:20px;border:1px solid var(--border-2);color:var(--fg-2);background:var(--faint-2)}
+  .badge.tierA{background:var(--fg);color:#000;border-color:var(--fg)}
+  .badge.blue{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-border)}
+  .badge.green{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+  .meta-line{font-size:13px;color:var(--muted-2);margin-top:18px;font-family:var(--mono)}
+
+  /* enablement callout */
+  .enable{margin-top:26px;border:1px solid var(--blue-border);background:var(--blue-bg);border-radius:10px;padding:16px 18px;font-size:13.5px;color:var(--fg-2);line-height:1.65}
+  .enable b{color:var(--blue)}
+
+  h2{font-size:13px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:18px;font-family:var(--mono)}
+  section.block{padding:42px 0;border-bottom:1px solid var(--border)}
+  .lead{font-size:17px;line-height:1.7;color:var(--fg-2);max-width:none}
+  .lead + .lead{margin-top:14px}
+  .lead b{color:var(--fg);font-weight:600}
+  p.body{font-size:15px;color:var(--fg-2);line-height:1.7}
+
+  /* SNAPSHOT */
+  .snap{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .snap .cell{border:1px solid var(--border);border-radius:10px;padding:18px 18px}
+  .snap .v{font-size:30px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+  .snap .l{font-size:12.5px;color:var(--muted);margin-top:8px}
+  .snap .src{font-family:var(--mono);font-size:10px;color:var(--muted-2);margin-top:7px}
+
+  /* SCORE */
+  .scorewrap{display:grid;grid-template-columns:300px 1fr;gap:22px;align-items:stretch}
+  .scorecard{border:1px solid var(--border-2);border-radius:12px;padding:22px;display:flex;flex-direction:column;justify-content:center;background:var(--card);color:var(--fg)}
+  .scorecard .big{font-size:72px;font-weight:680;line-height:.95;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .scorecard .of{font-size:20px;color:#888;font-weight:500}
+  .scorecard .tier{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-family:var(--mono);font-size:13px;color:#bbb}
+  .scorecard .tier b{background:#fff;color:#000;border-radius:5px;padding:2px 9px;font-weight:700}
+  .scorecard .modelname{font-family:var(--mono);font-size:11px;color:#777;margin-top:16px;line-height:1.5}
+  .dims{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .dim{border:1px solid var(--border);border-radius:10px;padding:15px 16px}
+  .dim .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+  .dim .nm{font-size:13px;font-weight:600}
+  .dim .wt{font-family:var(--mono);font-size:11px;color:var(--muted-2)}
+  .dim .sc{font-family:var(--mono);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+  .bar{height:5px;background:var(--faint);border-radius:3px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:3px;background:var(--blue)}
+  .dim .note{font-size:11.5px;color:var(--muted);margin-top:9px;line-height:1.5}
+  .subscores{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .chip{font-family:var(--mono);font-size:11.5px;border:1px solid var(--border-2);border-radius:7px;padding:7px 11px;color:var(--fg-2)}
+  .chip b{color:var(--fg)}
+  .chip .mx{color:var(--muted-2)}
+
+  /* OPPORTUNITY CARDS */
+  .opps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .opp{border:1px solid var(--border);border-radius:11px;padding:20px;display:flex;flex-direction:column;gap:10px}
+  .opp .tag{align-self:flex-start;font-family:var(--mono);font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:6px;text-transform:uppercase;letter-spacing:.03em}
+  .tag.disp{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+  .tag.exp{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
+  .tag.ai{background:var(--violet-bg);color:var(--violet);border:1px solid var(--violet-border)}
+  .opp h3{font-size:16px;font-weight:620;letter-spacing:-.01em}
+  .opp p{font-size:13px;color:var(--muted);line-height:1.6}
+  .opp .ev{font-family:var(--mono);font-size:11px;color:var(--fg-2);border-top:1px dashed var(--border-2);padding-top:10px;margin-top:auto}
+
+  /* TABLES */
+  .tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);text-align:left;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--faint-2);font-weight:500}
+  th.r,td.r{text-align:right;font-variant-numeric:tabular-nums}
+  td{padding:11px 14px;border-bottom:1px solid var(--border);color:var(--fg-2);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td .pname{font-weight:600;color:var(--fg)}
+  td.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  tr.core td{background:var(--blue-bg)}
+  tr.total td{font-weight:650;color:var(--fg);background:var(--faint)}
+  .sig{font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .sig.disp{background:var(--amber-bg);color:var(--amber)}
+  .sig.exp{background:var(--blue-bg);color:var(--blue)}
+  .sig.comp{background:var(--green-bg);color:var(--green)}
+  .note{font-size:11.5px;color:var(--muted-2);margin-top:10px;line-height:1.6}
+
+  /* FAI */
+  .fai{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .fai .cell{border:1px solid var(--border);border-radius:11px;padding:20px}
+  .fai .v{font-size:38px;font-weight:680;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+  .fai .v .u{font-size:18px;color:var(--muted)}
+  .fai .h{font-size:13.5px;font-weight:600;margin-top:10px}
+  .fai .d{font-size:12.5px;color:var(--muted);margin-top:7px;line-height:1.6}
+
+  /* INTENT */
+  .intent-stats{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:22px}
+  .istat .v{font-size:26px;font-weight:650;font-variant-numeric:tabular-nums}
+  .istat .l{font-size:12px;color:var(--muted)}
+  .icards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .icard{border:1px solid var(--border);border-radius:10px;padding:16px}
+  .icard .lab{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+  .icard .t{font-size:13.5px;font-weight:600}
+  .icard p{font-size:12px;color:var(--muted);line-height:1.55}
+
+  /* COMPETITIVE */
+  .comp-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .panel{border:1px solid var(--border);border-radius:11px;padding:20px}
+  .panel h3{font-size:14px;font-weight:620;margin-bottom:12px}
+  .panel ul{list-style:none;display:flex;flex-direction:column;gap:9px}
+  .panel li{font-size:13px;color:var(--fg-2);line-height:1.55;padding-left:18px;position:relative}
+  .panel li::before{content:'';position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  .angle{margin-top:18px;border:1px solid var(--border-2);border-radius:11px;padding:20px;background:var(--card)}
+  .angle h3{font-size:14px;font-weight:620;margin-bottom:8px}
+  .angle p{font-size:14px;color:var(--fg-2);line-height:1.7}
+
+  /* CONTACTS */
+  .contacts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .contact{border:1px solid var(--border);border-radius:11px;padding:20px;display:flex;flex-direction:column;gap:10px}
+  .contact .who{display:flex;align-items:center;gap:12px}
+  .avatar{width:42px;height:42px;border-radius:50%;background:var(--fg);color:#000;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;flex-shrink:0}
+  .contact .nm{font-size:15px;font-weight:620}
+  .contact .ti{font-size:12px;color:var(--muted);line-height:1.4}
+  .contact .loc{font-family:var(--mono);font-size:11px;color:var(--muted-2)}
+  .contact .angle-t{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:.04em}
+  .contact p{font-size:12.5px;color:var(--fg-2);line-height:1.6}
+  .contact a{font-family:var(--mono);font-size:11px;color:var(--blue);text-decoration:none;margin-top:auto}
+  .contact a:hover{text-decoration:underline}
+
+  /* EMAILS */
+  .email{border:1px solid var(--border);border-radius:11px;padding:0;margin-bottom:16px;overflow:hidden}
+  .email .ehead{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:13px 18px;background:var(--faint-2);border-bottom:1px solid var(--border);font-size:12.5px}
+  .email .ehead .to{font-weight:600}
+  .email .ehead .subj{color:var(--muted);font-family:var(--mono);font-size:11.5px}
+  .email .ebody{padding:18px;font-size:13.5px;line-height:1.7;color:var(--fg-2);white-space:pre-line}
+
+  /* OPP MATRIX + WEDGE */
+  .matrix{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .mcol{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .mcol .mh{padding:11px 15px;font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border)}
+  .mcol.p1 .mh{background:var(--fg);color:#000}
+  .mcol.p2 .mh{background:var(--faint);color:var(--fg)}
+  .mcol.p3 .mh{background:var(--faint-2);color:var(--muted)}
+  .mcol .mb{padding:15px;display:flex;flex-direction:column;gap:12px}
+  .mitem .mt{font-size:13.5px;font-weight:600;margin-bottom:4px}
+  .mitem .md{font-size:12px;color:var(--muted);line-height:1.5}
+  .mitem .mtime{font-family:var(--mono);font-size:10.5px;color:var(--blue);margin-top:5px}
+  .wedge{display:flex;flex-direction:column;gap:14px}
+  .phase{display:grid;grid-template-columns:120px 1fr;gap:18px;border:1px solid var(--border);border-radius:10px;padding:18px 20px}
+  .phase .pn{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--blue)}
+  .phase .pn .step{display:block;font-size:30px;color:var(--fg);font-weight:680;line-height:1;margin-top:4px}
+  .phase h3{font-size:15px;font-weight:620;margin-bottom:6px}
+  .phase p{font-size:13px;color:var(--muted);line-height:1.6}
+
+  /* SOURCES */
+  .sources{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .source{border:1px solid var(--border);border-radius:9px;padding:14px 16px}
+  .source .sn{font-size:13px;font-weight:600}
+  .source .sd{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.55}
+  footer{padding:34px 0 0;color:var(--muted-2);font-family:var(--mono);font-size:11.5px;line-height:1.7}
+
+  @media (max-width:880px){
+    .snap{grid-template-columns:repeat(2,1fr)}
+    .scorewrap{grid-template-columns:1fr}
+    .opps,.fai,.icards,.contacts,.matrix{grid-template-columns:1fr}
+    .dims{grid-template-columns:1fr 1fr}
+    .comp-grid,.sources{grid-template-columns:1fr}
+    h1.co{font-size:34px}
+    .phase{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- NAV -->
+  <nav class="nav" aria-label="Section navigation">
+    <span class="brand"><span class="tri">▲</span>Vercel <span class="sep">×</span> <span class="hg">HG Insights</span></span>
+    <a href="#why">Why Now</a>
+    <a href="#snapshot">Snapshot</a>
+    <a href="#opportunities">Opportunities</a>
+    <a href="#spend">Spend</a>
+    <a href="#tech">Tech Stack</a>
+    <a href="#fai">Buying Centers</a>
+    <a href="#intent">Intent</a>
+    <a href="#competitive">Competitive</a>
+    <a href="#contacts">Contacts</a>
+    <a href="#emails">Outreach</a>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="eyebrow"><span class="dot"></span>ACCOUNT BRIEF · ENABLED BY THE VERCEL ENTERPRISE LOOKALIKE ICTP · POWERED BY HG INSIGHTS</div>
+    <h1 class="co">Netflix, Inc.</h1>
+    <div class="tagline">Account intelligence for Vercel enterprise sellers — Los Gatos, CA · netflix.com</div>
+    <div class="badges">
+      <span class="badge tierA">Lookalike Tier A · 90 / 100</span>
+      <span class="badge blue">Next.js Installed</span>
+      <span class="badge">Media &amp; Entertainment</span>
+      <span class="badge green">Displacement: Netlify + AWS Amplify</span>
+      <span class="badge">Fortune 500 #116</span>
+    </div>
+    <div class="meta-line">Prepared June 2026 · All figures sourced from HG Insights · No data fabricated</div>
+
+    <div class="enable">
+      <b>How to use this brief.</b> This is a worked example of what your sellers get for any account the Vercel Enterprise Lookalike ICTP surfaces. The model scored every company in HG's database; Netflix is one of 60 sample whitespace accounts it returned. This page turns that single score into a seller-ready plan — the firmographic + technographic evidence behind the score, the displacement and expansion opportunities, the spend that funds them, the engineering buying center, and named contacts with outreach. Replicate it across the full target list to operationalize the ICTP.
+    </div>
+  </header>
+
+  <!-- WHY -->
+  <section id="why" class="block">
+    <h2>Why Netflix, Why Now</h2>
+    <p class="lead">Netflix is a <b>digital-first, engineering-led enterprise</b> whose product <i>is</i> a high-traffic web and app experience — exactly the profile the lookalike model is built to find. HG technographic data confirms they already run <b>Next.js</b> (Vercel's own framework, verified April 2026) alongside two competing frontend hosts, <b>Netlify and AWS Amplify</b>, plus <b>Amazon CloudFront</b> for edge delivery and <b>Contentful</b> as a headless CMS.</p>
+    <p class="lead">That combination is the wedge: the framework decision is already made in Vercel's favor, but the hosting and edge layer is split across competitors. With $2.21B in annual IT spend and a runtime stack that HG's FAI data shows is <b>97% owned by Engineering</b>, the buying center is concentrated and reachable. The model also flags <b>maximum GenAI maturity (15/15)</b> — Netflix is actively building AI-powered experiences that need fast, deployable frontends, opening the v0 / AI SDK conversation alongside core Frontend Cloud.</p>
+  </section>
+
+  <!-- SNAPSHOT -->
+  <section id="snapshot" class="block">
+    <h2>Account Snapshot</h2>
+    <div class="snap">
+      <div class="cell"><div class="v">$45.2B</div><div class="l">Annual Revenue</div><div class="src">HG Firmographic</div></div>
+      <div class="cell"><div class="v">16,000</div><div class="l">Global Employees</div><div class="src">HG Firmographic</div></div>
+      <div class="cell"><div class="v">$2.21B</div><div class="l">Annual IT Spend</div><div class="src">HG Spend Estimate</div></div>
+      <div class="cell"><div class="v">#116</div><div class="l">Fortune 500 · #189 Forbes Global 2000</div><div class="src">HG Firmographic</div></div>
+    </div>
+    <p class="note">Industry: Media and Entertainment (NAICS 515210 — Cable &amp; Other Subscription Programming). HQ: Los Gatos, California, USA. HG company ID 32947DD07899D7A60EFF8CB5A34B806B.</p>
+
+    <div style="margin-top:30px"></div>
+
+    <h2>Vercel Enterprise Lookalike Score</h2>
+    <div class="scorewrap">
+      <div class="scorecard">
+        <div><span class="big">90</span><span class="of"> / 100</span></div>
+        <div class="tier"><b>TIER A</b> ≥ 75</div>
+        <div class="modelname">vercel_enterprise_customer_lookalikes · Fit 55 / Need 30 / Intent 15</div>
+      </div>
+      <div>
+        <div class="dims">
+          <div class="dim">
+            <div class="top"><span class="nm">Fit</span><span class="wt">×55%</span></div>
+            <div class="top" style="margin-top:-4px"><span class="sc">92</span><span class="wt">/100</span></div>
+            <div class="bar"><i style="width:92%"></i></div>
+            <div class="note">Enterprise scale + Media/Tech industry + IT-spend quality. Mirrors the seed customer firmographics.</div>
+          </div>
+          <div class="dim">
+            <div class="top"><span class="nm">Need</span><span class="wt">×30%</span></div>
+            <div class="top" style="margin-top:-4px"><span class="sc">89</span><span class="wt">/100</span></div>
+            <div class="bar"><i style="width:89%"></i></div>
+            <div class="note">Next.js + competing hosts + headless CMS + a deep cloud-native stack. Demonstrated platform need.</div>
+          </div>
+          <div class="dim">
+            <div class="top"><span class="nm">Intent</span><span class="wt">×15%</span></div>
+            <div class="top" style="margin-top:-4px"><span class="sc">86</span><span class="wt">/100</span></div>
+            <div class="bar"><i style="width:86%"></i></div>
+            <div class="note">Active research across developer-platform and cloud / commerce categories.</div>
+          </div>
+          <div class="dim">
+            <div class="top"><span class="nm">Sub-scores</span><span class="wt">into Fit / Need</span></div>
+            <div class="subscores" style="margin-top:6px">
+              <span class="chip">Dev Spend % <b>7</b><span class="mx">/15</span></span>
+              <span class="chip">GenAI Maturity <b>15</b><span class="mx">/15</span></span>
+            </div>
+            <div class="note">Dev+cloud at 14% of IT budget; a fully-built GenAI stack (max score).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Score carried directly from the Vercel Enterprise Lookalike ICTP. Composite = Fit×0.55 + Need×0.30 + Intent×0.15, tiered A≥75 / B≥55 / C≥35.</p>
+  </section>
+
+  <!-- OPPORTUNITIES -->
+  <section id="opportunities" class="block">
+    <h2>Key Opportunities</h2>
+    <div class="opps">
+      <div class="opp">
+        <span class="tag disp">Displacement</span>
+        <h3>Consolidate frontend hosting onto Vercel</h3>
+        <p>Netflix runs both <b>Netlify</b> and <b>AWS Amplify</b> for frontend deployment. Pitch Vercel Frontend Cloud as the single platform their Next.js apps already target — eliminating two overlapping hosts and the glue between them.</p>
+        <div class="ev">HG installs: Netlify (verified 2026-04-06) · AWS Amplify (verified 2026-04-06)</div>
+      </div>
+      <div class="opp">
+        <span class="tag exp">Expansion</span>
+        <h3>Next.js → Vercel edge &amp; performance</h3>
+        <p>Next.js is already installed (intensity 18, verified Apr 2026). The expansion is moving those workloads onto Vercel's Edge Network for global performance and Core Web Vitals — where they currently lean on Amazon CloudFront.</p>
+        <div class="ev">HG installs: Next.js (Vercel, Inc.) · Amazon CloudFront (CDN, intensity 64)</div>
+      </div>
+      <div class="opp">
+        <span class="tag ai">AI / v0</span>
+        <h3>AI SDK &amp; v0 for AI-native experiences</h3>
+        <p>The model scored Netflix <b>15/15 on GenAI maturity</b> — a full foundation-model + AI-infra stack. Frame Vercel AI SDK, AI Gateway, and v0 as the fast path to ship AI-powered member experiences on the frontend they already build with.</p>
+        <div class="ev">Lookalike GenAI sub-score: 15/15 · Buying center: Revenue &amp; Applied AI Engineering</div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px"></div>
+    <h2>Opportunity Matrix</h2>
+    <div class="matrix">
+      <div class="mcol p1">
+        <div class="mh">Priority 1 · Near term</div>
+        <div class="mb">
+          <div class="mitem"><div class="mt">Frontend host displacement</div><div class="md">Land a Next.js app currently on Netlify or Amplify as a Vercel proof-of-value.</div><div class="mtime">Entry: 0–3 months</div></div>
+          <div class="mitem"><div class="mt">Edge performance pilot</div><div class="md">Benchmark a high-traffic surface on Vercel Edge vs. CloudFront.</div><div class="mtime">Entry: 1–4 months</div></div>
+        </div>
+      </div>
+      <div class="mcol p2">
+        <div class="mh">Priority 2 · Mid term</div>
+        <div class="mb">
+          <div class="mitem"><div class="mt">Platform consolidation</div><div class="md">Standardize the App Dev Platform team on Vercel for Next.js delivery org-wide.</div><div class="mtime">Entry: 3–9 months</div></div>
+          <div class="mitem"><div class="mt">Headless + Vercel</div><div class="md">Pair existing Contentful CMS with Vercel for composable content delivery.</div><div class="mtime">Entry: 4–9 months</div></div>
+        </div>
+      </div>
+      <div class="mcol p3">
+        <div class="mh">Priority 3 · Long term</div>
+        <div class="mb">
+          <div class="mitem"><div class="mt">AI SDK / v0 expansion</div><div class="md">Embed Vercel AI SDK + AI Gateway in AI-native member experiences.</div><div class="mtime">Entry: 6–12 months</div></div>
+          <div class="mitem"><div class="mt">Enterprise agreement</div><div class="md">Consolidate Frontend Cloud + AI + observability into one enterprise contract.</div><div class="mtime">Entry: 9–18 months</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px"></div>
+
+    <h2>Recommended Wedge Strategy</h2>
+    <div class="wedge">
+      <div class="phase">
+        <div class="pn">PHASE<span class="step">1</span></div>
+        <div>
+          <h3>Land on the framework decision already made</h3>
+          <p>Netflix builds with Next.js but ships it on competitors. Open with the App Dev Platform / Frontend Engineering team and propose migrating one Netlify- or Amplify-hosted Next.js surface to Vercel. Low-friction entry — no framework change, just the platform built for it.</p>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pn">PHASE<span class="step">2</span></div>
+        <div>
+          <h3>Prove edge performance, then consolidate</h3>
+          <p>Use the pilot's Core Web Vitals and DX gains to standardize the platform org on Vercel, displacing the second competing host and reducing the CloudFront-fronted custom edge setup. Pair with their existing Contentful CMS for a composable reference architecture.</p>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pn">PHASE<span class="step">3</span></div>
+        <div>
+          <h3>Expand into AI and an enterprise agreement</h3>
+          <p>With a max GenAI-maturity profile and an Applied-AI engineering org, introduce Vercel AI SDK, AI Gateway, and v0 for AI-native member experiences — then roll Frontend Cloud, AI, and observability into a single enterprise agreement.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SPEND -->
+  <section id="spend" class="block">
+    <h2>HG Insights — Estimated Annual Technology Spend</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Category</th><th class="r">Est. Annual Spend</th><th>Vercel Relevance</th></tr></thead>
+        <tbody>
+          <tr class="total"><td>Total IT</td><td class="r mono">$2,212,878,113</td><td>Overall budget envelope</td></tr>
+          <tr><td>Services</td><td class="r mono">$701,580,202</td><td>Outsourcing &amp; managed services</td></tr>
+          <tr class="core"><td>Cloud Services</td><td class="r mono">$257,297,015</td><td>Core — where Vercel is funded from</td></tr>
+          <tr><td><span style="color:var(--muted)">↳</span> Infrastructure-as-a-Service (IaaS)</td><td class="r mono">$87,937,478</td><td>Existing cloud commitment</td></tr>
+          <tr><td><span style="color:var(--muted)">↳</span> Software-as-a-Service (SaaS)</td><td class="r mono">$84,807,598</td><td>Platform-subscription appetite</td></tr>
+          <tr class="core"><td><span style="color:var(--muted)">↳</span> Platform-as-a-Service (PaaS)</td><td class="r mono">$50,610,375</td><td>Core — Vercel's category</td></tr>
+          <tr><td>Software</td><td class="r mono">$404,723,042</td><td>Application software budget</td></tr>
+          <tr class="core"><td><span style="color:var(--muted)">↳</span> Application Development &amp; Deployment</td><td class="r mono">$61,332,120</td><td>Core — frontend build &amp; deploy</td></tr>
+          <tr><td><span style="color:var(--muted)">↳</span> Software Infrastructure</td><td class="r mono">$121,541,193</td><td>Runtime, CI/CD, observability</td></tr>
+          <tr><td>Hardware</td><td class="r mono">$297,408,476</td><td>Server / client / network</td></tr>
+          <tr><td>Communications</td><td class="r mono">$122,761,011</td><td>Network &amp; mobile</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note"><b>Dev + Cloud spend = ~$318.6M</b> (App Dev &amp; Deployment $61.3M + Cloud Services $257.3M), about <b>14%</b> of total IT — the basis for the model's Dev Spend % sub-score. Figures are HG Insights proprietary estimates of annual spend, not reported financials.</p>
+  </section>
+
+  <!-- TECH -->
+  <section id="tech" class="block">
+    <h2>Current Technology Landscape — Web, Frontend &amp; Cloud</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Product</th><th>Vendor</th><th class="r">Intensity</th><th>Last Verified</th><th>Signal for Vercel</th></tr></thead>
+        <tbody>
+          <tr><td class="pname">Next.js</td><td>Vercel, Inc.</td><td class="r mono">18</td><td class="mono">2026-04-22</td><td><span class="sig exp">Expansion</span> framework already chosen</td></tr>
+          <tr><td class="pname">Netlify</td><td>Netlify, Inc.</td><td class="r mono">3</td><td class="mono">2026-04-06</td><td><span class="sig disp">Displacement</span> direct competitor</td></tr>
+          <tr><td class="pname">AWS Amplify</td><td>Amazon Web Services</td><td class="r mono">3</td><td class="mono">2026-04-06</td><td><span class="sig disp">Displacement</span> competing host</td></tr>
+          <tr><td class="pname">Amazon CloudFront</td><td>Amazon Web Services</td><td class="r mono">64</td><td class="mono">2026-03-01</td><td><span class="sig disp">Displacement</span> CDN / edge overlap</td></tr>
+          <tr><td class="pname">Contentful</td><td>Contentful GmbH</td><td class="r mono">24</td><td class="mono">2026-04-23</td><td><span class="sig comp">Complementary</span> headless CMS pairs with Vercel</td></tr>
+          <tr><td class="pname">React</td><td>Meta Platforms, Inc.</td><td class="r mono">2,167</td><td class="mono">2026-06-08</td><td><span class="sig exp">Expansion</span> Vercel-native ecosystem</td></tr>
+          <tr><td class="pname">Node.js</td><td>OpenJS Foundation</td><td class="r mono">2,190</td><td class="mono">2026-06-10</td><td><span class="sig exp">Expansion</span> serverless runtime</td></tr>
+          <tr><td class="pname">Kubernetes</td><td>The Linux Foundation</td><td class="r mono">645</td><td class="mono">2026-06-09</td><td><span class="sig comp">Complementary</span> cloud-native maturity</td></tr>
+          <tr><td class="pname">GitHub</td><td>GitHub, Inc.</td><td class="r mono">872</td><td class="mono">2026-06-11</td><td><span class="sig comp">Complementary</span> native Vercel deploy integration</td></tr>
+          <tr><td class="pname">Amazon Web Services</td><td>Amazon Web Services</td><td class="r mono">3,457</td><td class="mono">2026-06-11</td><td><span class="sig comp">Complementary</span> primary cloud</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Source: HG Insights technographic install data (global install records). Intensity is HG's relative usage measure; recent verification dates indicate active use. Netflix also carries a small existing Vercel install (verified 2023-10-05) — a warm internal reference.</p>
+  </section>
+
+  <!-- FAI -->
+  <section id="fai" class="block">
+    <h2>Buying Centers</h2>
+    <div class="fai">
+      <div class="cell">
+        <div class="v">97.3<span class="u">%</span></div>
+        <div class="h">of Node.js signal is in Engineering</div>
+        <div class="d">The web/runtime stack is overwhelmingly engineering-owned (signal strength 1,420). Vercel's buyer is Engineering — not central IT — and at Netflix that center is unambiguous.</div>
+      </div>
+      <div class="cell">
+        <div class="v">95.2<span class="u">%</span></div>
+        <div class="h">of Kubernetes signal is in Engineering</div>
+        <div class="d">Cloud-native orchestration also concentrated in Engineering (strength 595) — a sophisticated platform team that evaluates infrastructure on DX and performance, Vercel's strengths.</div>
+      </div>
+      <div class="cell">
+        <div class="v">278</div>
+        <div class="h">role-level signals on the web stack</div>
+        <div class="d">Software Engineers, Architects, and DevOps dominate the detected roles for Node.js, React, and Kubernetes — the exact personas who choose a frontend platform.</div>
+      </div>
+    </div>
+    <p class="note">Source: HG Insights Functional Area Intelligence (FAI). Department usage share reflects where product signals concentrate across the organization.</p>
+  </section>
+
+  <!-- INTENT -->
+  <section id="intent" class="block">
+    <h2>Active Intent Signals</h2>
+    <div class="intent-stats">
+      <div class="istat"><div class="v">535</div><div class="l">active intent topics (30-day)</div></div>
+      <div class="istat"><div class="v">378</div><div class="l">high-intent topics</div></div>
+      <div class="istat"><div class="v">35</div><div class="l">first-party TrustRadius signals</div></div>
+      <div class="istat"><div class="v">86</div><div class="l">lookalike Intent score</div></div>
+    </div>
+    <div class="icards">
+      <div class="icard">
+        <div class="lab"><span class="t">Developer-platform research</span><span class="sig exp">Expansion</span></div>
+        <p>The lookalike Intent score (86) is driven by research across developer-platform and deployment categories — the categories that precede a Frontend Cloud purchase.</p>
+      </div>
+      <div class="icard">
+        <div class="lab"><span class="t">Cloud infrastructure activity</span><span class="sig comp">Complementary</span></div>
+        <p>First-party TrustRadius activity includes Amazon S3 product research (Jun 2026) — consistent with active cloud-infrastructure evaluation.</p>
+      </div>
+      <div class="icard">
+        <div class="lab"><span class="t">Context mix</span><span class="sig disp">Signal</span></div>
+        <p>Of categorized signals: 24 complementary, 12 expansion, 4 displacement — a profile that favors land-and-expand over pure rip-and-replace.</p>
+      </div>
+    </div>
+    <p class="note">Source: HG Insights merged intent (HG proprietary + TrustRadius first-party), 30-day window ending 2026-06-27. Note: a large share of a brand like Netflix's raw bidstream topics are broad/consumer; the lookalike Intent score weights the developer-platform and cloud / commerce categories that matter to Vercel.</p>
+  </section>
+
+  <!-- COMPETITIVE -->
+  <section id="competitive" class="block">
+    <h2>Competitive Positioning — Displacing Netlify &amp; AWS Amplify</h2>
+    <div class="comp-grid">
+      <div class="panel">
+        <h3>What HG data reveals</h3>
+        <ul>
+          <li>Next.js is installed and actively verified — the framework decision favors Vercel already.</li>
+          <li>Two competing frontend hosts (Netlify, AWS Amplify) run in parallel — a fragmented, consolidatable deployment layer.</li>
+          <li>Amazon CloudFront fronts edge delivery — a custom setup Vercel's Edge Network replaces natively for Next.js.</li>
+          <li>Contentful (headless CMS) is in place — composable architecture that pairs cleanly with Vercel.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Your angle for Netflix</h3>
+        <ul>
+          <li><b>Don't sell a framework — sell the platform built for it.</b> Next.js + Vercel is the first-party path; Netlify and Amplify are not.</li>
+          <li>Lead with <b>consolidation</b>: one platform replaces two hosts plus the edge glue, lowering operational surface area.</li>
+          <li>Prove <b>edge performance</b> against CloudFront on a real high-traffic surface — Core Web Vitals as the scoreboard.</li>
+          <li>Engage <b>Engineering directly</b> — FAI shows the decision sits with platform/frontend engineers, not procurement-led IT.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="angle">
+      <h3>Why now</h3>
+      <p>The competing-host installs were verified within the last quarter, meaning the deployment layer is live and in flux — the window to consolidate before deeper Netlify/Amplify entrenchment is open. Combined with a Tier-A lookalike score and a max GenAI profile, Netflix is a high-conviction, multi-product target rather than a single-deal opportunity.</p>
+    </div>
+  </section>
+
+  <!-- CONTACTS -->
+  <section id="contacts" class="block">
+    <h2>Target Contacts</h2>
+    <div class="contacts">
+      <div class="contact">
+        <div class="who"><div class="avatar">SH</div><div><div class="nm">Scott Holmes</div><div class="ti">Director of Engineering, Application Development Platform</div></div></div>
+        <div class="loc">San Francisco, CA</div>
+        <div class="angle-t">Economic / platform owner</div>
+        <p>Owns the internal application-development platform — the team that standardizes how Next.js apps are built and shipped. The natural owner of a Vercel Frontend Cloud consolidation.</p>
+        <a href="http://www.linkedin.com/in/scottrholmes">linkedin.com/in/scottrholmes ↗</a>
+      </div>
+      <div class="contact">
+        <div class="who"><div class="avatar">NV</div><div><div class="nm">Nilesh Vijaywargiay</div><div class="ti">Head of Engineering, Revenue &amp; Applied AI</div></div></div>
+        <div class="loc">San Francisco, CA</div>
+        <div class="angle-t">AI / v0 champion</div>
+        <p>Leads applied-AI engineering — the entry point for Vercel AI SDK, AI Gateway, and v0, mapping directly to Netflix's 15/15 GenAI-maturity signal.</p>
+        <a href="http://www.linkedin.com/in/nileshvj">linkedin.com/in/nileshvj ↗</a>
+      </div>
+      <div class="contact">
+        <div class="who"><div class="avatar">JK</div><div><div class="nm">Jessica Kahn</div><div class="ti">VP of Engineering, Commerce</div></div></div>
+        <div class="loc">San Francisco, CA</div>
+        <div class="angle-t">Performance / conversion buyer</div>
+        <p>Owns commerce and signup web flows where frontend performance directly drives conversion — the clearest ROI story for Vercel edge + Next.js displacement.</p>
+        <a href="http://www.linkedin.com/in/jesskahn">linkedin.com/in/jesskahn ↗</a>
+      </div>
+    </div>
+    <p class="note">Source: HG Insights contact data (Apollo provider). Names, titles, and LinkedIn profiles verified; email/phone available via HG contact enrichment (not run for this brief). 72 engineering leaders matched at Netflix.</p>
+  </section>
+
+  <!-- EMAILS -->
+  <section id="emails" class="block">
+    <h2>Prospecting Emails</h2>
+
+    <div class="email">
+      <div class="ehead"><span class="to">To: Scott Holmes — Director of Engineering, App Dev Platform</span><span class="subj">Subject: Next.js, on the platform built for it</span></div>
+      <div class="ebody">Hi Scott,
+
+Your teams are already building on Next.js — but HG shows those apps shipping across Netlify and AWS Amplify. That's two deployment platforms plus the edge glue to maintain, for a framework Vercel builds first-party.
+
+Worth 30 minutes to look at consolidating one Next.js surface onto Vercel as a proof-of-value? We can benchmark build/deploy DX and edge performance head-to-head, no framework change required.
+
+— [Vercel Enterprise AE]</div>
+    </div>
+
+    <div class="email">
+      <div class="ehead"><span class="to">To: Nilesh Vijaywargiay — Head of Engineering, Revenue &amp; Applied AI</span><span class="subj">Subject: Shipping AI experiences without the frontend tax</span></div>
+      <div class="ebody">Hi Nilesh,
+
+Teams building AI-native experiences usually hit the same wall: the model works, but standing up a fast, streaming frontend for it is its own project. Vercel's AI SDK, AI Gateway, and v0 collapse that — and they run on the Next.js stack your org already uses.
+
+Given where Applied AI is heading at Netflix, I'd love to show how other engineering orgs are shipping AI features in days instead of quarters. Open to a short call?
+
+— [Vercel Enterprise AE]</div>
+    </div>
+
+    <div class="email">
+      <div class="ehead"><span class="to">To: Jessica Kahn — VP of Engineering, Commerce</span><span class="subj">Subject: Core Web Vitals → conversion on your signup flows</span></div>
+      <div class="ebody">Hi Jessica,
+
+For commerce and signup, frontend latency is conversion — and you're currently delivering Next.js through a mix of Amplify/Netlify and CloudFront. Vercel's Edge Network was built to take that exact stack and make it faster with less operational overhead.
+
+Could we run a Core Web Vitals benchmark on one high-traffic flow? It's the fastest way to put a revenue number on the platform decision.
+
+— [Vercel Enterprise AE]</div>
+    </div>
+    <p class="note">Templates for seller use — personalize before sending. Email addresses require HG contact enrichment.</p>
+  </section>
+
+  <footer>
+      Vercel × HG Insights · Sample Account Brief generated from the Vercel Enterprise Lookalike ICTP · Prepared June 2026 · Proprietary &amp; Confidential
+    </footer>
+
+
+</div>
+</body>
+</html>

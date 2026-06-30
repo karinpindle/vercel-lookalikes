@@ -1,0 +1,2245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vercel Enterprise Customer Lookalikes — Scoring Model</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #000000;
+    --surface:      #0c0c0c;
+    --surface-2:    #0a0a0a;
+    --border:       #262626;
+    --border-light: #343434;
+
+    --fit:          #3b9eff;
+    --fit-dim:      rgba(0,112,243,.14);
+    --fit-border:   rgba(59,158,255,.32);
+
+    --need:         #f5a623;
+    --need-dim:     rgba(245,166,35,.13);
+    --need-border:  rgba(245,166,35,.30);
+
+    --intent:       #a899ff;
+    --intent-dim:   rgba(120,100,255,.15);
+    --intent-border:rgba(168,153,255,.32);
+
+    --text:         #ededed;
+    --text-2:       #8f8f8f;
+    --text-3:       #5a5a5a;
+
+    --mono: 'Geist Mono', 'SF Mono', ui-monospace, 'Menlo', monospace;
+    --sans: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  html { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.6; }
+
+  /* ---------- PAGE ---------- */
+  .page { max-width: 1180px; margin: 0 auto; padding: 0 32px 80px; }
+
+  /* ---------- NAV ---------- */
+  .topnav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+    margin: 0 -32px 40px; padding: 11px 32px;
+    background: rgba(7,8,13,.82); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .topnav-brand {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--text); font-weight: 600; margin-right: 14px; white-space: nowrap;
+  }
+  .topnav-brand span { color: var(--fit); }
+  .topnav a {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .03em;
+    color: var(--text-2); text-decoration: none;
+    padding: 5px 10px; border-radius: 3px; border: 1px solid transparent;
+    transition: color .15s, border-color .15s, background .15s; white-space: nowrap;
+  }
+  .topnav a:hover { color: var(--text); border-color: var(--border-light); background: var(--surface); }
+  .topnav a:focus-visible { outline: 2px solid var(--fit); outline-offset: 2px; }
+
+  /* offset anchor targets so the sticky nav doesn't cover section tops */
+  #architecture, #sample, #fit, #need, #intent, #methodology { scroll-margin-top: 64px; }
+
+  /* ---------- COLLAPSIBLE SECTIONS ---------- */
+  .section-collapse > summary.sec-sum {
+    list-style: none; cursor: pointer;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  }
+  .section-collapse > summary.sec-sum::-webkit-details-marker { display: none; }
+  .section-collapse > summary.sec-sum-head > .section-header { flex: 1; margin-bottom: 0; }
+  .section-collapse > summary.sec-sum-head { margin-bottom: 20px; }
+  .section-collapse > summary .chev {
+    font-family: var(--mono); color: var(--text-2); font-size: 22px; line-height: 1;
+    transition: transform .2s; flex-shrink: 0; margin-top: 2px;
+  }
+  .section-collapse[open] > summary .chev { transform: rotate(90deg); }
+  .section-collapse > summary:hover .chev { color: var(--text); }
+  .section-collapse > summary:focus-visible { outline: 2px solid var(--fit); outline-offset: 3px; border-radius: 3px; }
+  @media (prefers-reduced-motion: reduce) { .section-collapse > summary .chev { transition: none; } }
+
+  .header { padding-top: 8px; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  /* ---------- HEADER ---------- */
+  .header { border-bottom: 1px solid var(--border); padding-bottom: 32px; margin-bottom: 40px; }
+
+  .header-eyebrow {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
+    color: var(--text-2); text-transform: uppercase; margin-bottom: 20px;
+  }
+  .header-eyebrow::before {
+    content: '';
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--fit);
+    box-shadow: 0 0 8px var(--fit);
+    flex-shrink: 0;
+  }
+
+  .header-title {
+    font-size: 28px; font-weight: 700; letter-spacing: -.03em;
+    color: #ededed; text-wrap: balance; margin-bottom: 10px; line-height: 1.2;
+  }
+
+  .header-desc {
+    font-size: 13px; color: var(--text-2); max-width: none; line-height: 1.7; margin-bottom: 24px;
+  }
+
+  .header-stats {
+    display: flex; gap: 32px; flex-wrap: wrap;
+  }
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat-value { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+
+  /* ---------- ARCHITECTURE ---------- */
+  .architecture { margin-bottom: 56px; }
+
+  .section-eyebrow {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--text-2); margin-bottom: 16px;
+  }
+
+  .weight-bar-wrap { display: flex; height: 10px; border-radius: 2px; overflow: hidden; gap: 2px; margin-bottom: 16px; }
+  .weight-seg { height: 100%; border-radius: 1px; }
+  .weight-seg.fit    { background: var(--fit); }
+  .weight-seg.need   { background: var(--need); }
+  .weight-seg.intent { background: var(--intent); }
+
+  .weight-legend {
+    display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 28px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 1px; flex-shrink: 0; }
+  .legend-pct { font-family: var(--mono); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .legend-label { color: var(--text-2); font-size: 11px; }
+
+  .tier-row {
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .tier-chip {
+    display: flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border-light); border-radius: 3px;
+    padding: 5px 10px; font-family: var(--mono); font-size: 11px;
+  }
+  .tier-letter { font-weight: 700; font-size: 13px; }
+  .tier-A .tier-letter { color: var(--fit); }
+  .tier-B .tier-letter { color: #7EC8FF; }
+  .tier-C .tier-letter { color: var(--need); }
+  .tier-D .tier-letter { color: var(--text-2); }
+  .tier-score { color: var(--text-2); }
+
+  /* ---------- SCORE SECTIONS ---------- */
+  .score-section { margin-bottom: 48px; }
+  .score-section + .score-section { border-top: 1px solid var(--border); padding-top: 48px; }
+
+  .section-header {
+    display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .section-title {
+    font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  }
+  .section-title.fit    { color: var(--fit); }
+  .section-title.need   { color: var(--need); }
+  .section-title.intent { color: var(--intent); }
+
+  .section-weight {
+    font-family: var(--mono); font-size: 11px; color: var(--text-2);
+    border: 1px solid var(--border-light); border-radius: 2px; padding: 2px 7px;
+  }
+  .section-note { font-size: 12px; color: var(--text-2); flex-basis: 100%; margin-top: 4px; }
+
+  .dim-grid { display: flex; flex-direction: column; gap: 12px; }
+
+  /* ---------- DIMENSION CARD ---------- */
+  .dim-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .dim-card.fit    { border-left: 3px solid var(--fit); }
+  .dim-card.need   { border-left: 3px solid var(--need); }
+  .dim-card.intent { border-left: 3px solid var(--intent); }
+
+  .dim-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    padding: 14px 16px 12px; border-bottom: 1px solid var(--border);
+  }
+  .dim-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .dim-desc { font-size: 11px; color: var(--text-2); margin-top: 3px; max-width: none; }
+  .dim-cap-badge {
+    font-family: var(--mono); font-size: 11px; color: var(--text-2);
+    background: var(--bg); border: 1px solid var(--border-light);
+    border-radius: 2px; padding: 3px 8px; white-space: nowrap; flex-shrink: 0;
+  }
+  .dim-cap-badge span { font-weight: 600; color: var(--text); }
+
+  .dim-body { padding: 0; }
+
+  /* ---------- RULES TABLE ---------- */
+  .rules-table { width: 100%; border-collapse: collapse; }
+  .rules-table th {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-2); padding: 8px 16px; text-align: left;
+    border-bottom: 1px solid var(--border); background: var(--surface-2);
+    font-weight: 500;
+  }
+  .rules-table th:last-child { text-align: right; }
+  .rules-table td { padding: 9px 16px; font-size: 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .rules-table tr:last-child td { border-bottom: none; }
+  .rules-table .rule-cond { color: var(--text); }
+  .rules-table .rule-note { color: var(--text-2); font-size: 11px; margin-top: 2px; }
+  .rules-table .rule-pts  { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
+  .pts-40 { color: var(--fit); }
+  .pts-30, .pts-28 { color: #7EC8FF; }
+  .pts-20, .pts-22, .pts-18 { color: var(--need); }
+  .pts-low { color: var(--text-2); }
+
+  /* ---------- SUBGROUPS ---------- */
+  .subgroup { border-bottom: 1px solid var(--border); }
+  .subgroup:last-child { border-bottom: none; }
+  .subgroup-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px 9px; background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .subgroup-name { font-size: 11px; font-weight: 600; color: var(--text-2); letter-spacing: .04em; text-transform: uppercase; }
+  .subgroup-cap { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+
+  .product-row { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--border); }
+  .product-row:last-child { border-bottom: none; }
+  .product-name { font-size: 12px; font-weight: 500; color: var(--text); min-width: 160px; }
+  .product-signal { font-size: 11px; color: var(--text-2); flex: 1; }
+  .product-pts { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; margin-left: auto; flex-shrink: 0; }
+
+  /* ---------- INTENT TOPICS ---------- */
+  .topic-row { display: flex; align-items: flex-start; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--border); }
+  .topic-row:last-child { border-bottom: none; }
+  .topic-name { font-size: 12px; font-weight: 500; color: var(--text); min-width: 200px; }
+  .topic-signal { font-size: 11px; color: var(--text-2); flex: 1; }
+  .topic-pts { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; margin-left: auto; flex-shrink: 0; color: var(--intent); }
+
+  /* ---------- SCORING NOTE ---------- */
+  .scoring-note {
+    margin: 0 16px 12px; padding: 10px 12px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 2px; font-size: 11px; color: var(--text-2); line-height: 1.6;
+    margin-top: 12px;
+  }
+  .scoring-note::before { content: 'Methodology — '; font-weight: 600; color: var(--text-2); }
+
+  /* ---------- SCORE METER ---------- */
+  .cap-meter-wrap { padding: 12px 16px 0; }
+  .cap-meter-label { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); margin-bottom: 5px; font-family: var(--mono); }
+  .cap-meter { height: 3px; background: var(--border); border-radius: 1px; margin-bottom: 14px; overflow: hidden; }
+  .cap-meter-fill { height: 100%; border-radius: 1px; }
+  .cap-meter-fill.fit    { background: var(--fit); }
+  .cap-meter-fill.need   { background: var(--need); }
+  .cap-meter-fill.intent { background: var(--intent); }
+
+  /* ---------- ENABLE SALES ---------- */
+  .es-intro { font-size: 13px; color: var(--text-2); max-width: none; line-height: 1.7; margin-bottom: 4px; }
+  .es-intro b { color: var(--text); font-weight: 600; }
+
+  .brief-cta {
+    display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+    border: 1px solid var(--fit-border); background: var(--fit-dim); border-radius: 8px;
+    padding: 18px 22px; margin: 20px 0 30px; text-decoration: none;
+  }
+  .brief-cta:hover { border-color: var(--fit); }
+  .brief-cta .l .k { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--fit); }
+  .brief-cta .l .t { font-size: 16px; font-weight: 600; color: var(--text); margin-top: 5px; }
+  .brief-cta .l .d { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+  .brief-cta .go { font-family: var(--mono); font-size: 13px; color: var(--fit); white-space: nowrap; }
+
+  .uc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .uc-card {
+    border: 1px solid var(--border); border-left: 3px solid var(--border-light);
+    border-radius: 5px; background: var(--surface); padding: 15px 17px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .uc-card.new { border-left-color: var(--fit); }
+  .uc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .uc-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .uc-badge { font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+    color: var(--fit); background: var(--fit-dim); border: 1px solid var(--fit-border); border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+  .uc-desc { font-size: 12px; color: var(--text-2); line-height: 1.6; }
+  @media (max-width: 760px) { .uc-grid { grid-template-columns: 1fr; } }
+
+  /* ---------- FOOTER ---------- */
+  .footer { border-top: 1px solid var(--border); padding-top: 28px; margin-top: 56px; }
+  .footer-text { font-size: 11px; color: var(--text-2); line-height: 1.8; max-width: none; }
+  .footer-text strong { color: var(--text); font-weight: 600; }
+  .footer-meta { font-family: var(--mono); font-size: 10px; color: var(--text-3); margin-top: 16px; letter-spacing: .04em; }
+
+  /* ---------- OVERFLOW GUARD ---------- */
+  .table-wrap { overflow-x: auto; }
+
+  /* ---------- SAMPLE ---------- */
+  .sample { margin-bottom: 56px; }
+  .sample-intro { font-size: 12px; color: var(--text-2); max-width: none; line-height: 1.7; margin-bottom: 20px; }
+
+  .sample-stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+  .sample-stat {
+    border: 1px solid var(--border-light); border-radius: 4px;
+    padding: 10px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 3px; min-width: 92px;
+  }
+  .sample-stat .v { font-family: var(--mono); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sample-stat .l { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-2); }
+  .sample-stat.tA .v { color: var(--fit); }
+  .sample-stat.tB .v { color: #7EC8FF; }
+  .sample-stat.f500 .v { color: #FFD23F; }
+  .sample-stat.g2000 .v { color: var(--need); }
+
+  .sample-table { width: 100%; border-collapse: collapse; min-width: 0; }
+  .sample .table-wrap { overflow-x: visible; }
+  .sample-table thead th {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--text-2); font-weight: 500; padding: 8px 8px; text-align: left;
+    border-bottom: 1px solid var(--border-light); background: var(--surface-2);
+    position: sticky; top: 0;
+  }
+  .sample-table thead th.num { text-align: right; }
+  .sample-table tbody td { padding: 9px 8px; font-size: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .sample-table tbody tr:hover { background: var(--surface); }
+  .r-num { font-family: var(--mono); color: var(--text-3); font-size: 11px; width: 26px; }
+  .r-name { font-weight: 500; color: var(--text); white-space: nowrap; }
+  .r-cc { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+  .r-rev, .r-emp { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 11px; text-align: left; }
+  .r-fni { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--text-2); font-size: 11px; width: 34px; }
+  .r-score { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .r-score b { color: var(--text); font-size: 13px; }
+
+  .sig {
+    display: inline-block; font-family: var(--mono); font-size: 9.5px;
+    color: var(--need); background: var(--need-dim); border: 1px solid var(--need-border);
+    border-radius: 2px; padding: 1px 5px; margin: 1px 3px 1px 0; white-space: nowrap;
+  }
+  .flag {
+    display: inline-block; font-family: var(--mono); font-size: 9px; font-weight: 600;
+    border-radius: 2px; padding: 1px 5px; margin-left: 2px; vertical-align: middle; letter-spacing: .02em;
+  }
+  .flag-f500 { color: #FFD23F; background: rgba(255,210,63,.1); border: 1px solid rgba(255,210,63,.3); }
+  .flag-g2000 { color: var(--need); background: var(--need-dim); border: 1px solid var(--need-border); }
+  .flag-none { color: var(--text-3); }
+
+  .tier-pill {
+    display: inline-block; font-weight: 700; font-size: 10px; width: 16px; text-align: center;
+    border-radius: 2px; padding: 1px 0; margin-right: 2px;
+  }
+  .tier-pill.t-A { color: #03203a; background: var(--fit); }
+  .tier-pill.t-B { color: #06223A; background: #7EC8FF; }
+  .tier-pill.t-C { color: #2A1B05; background: var(--need); }
+  .tier-pill.t-D { color: var(--text-2); background: var(--border-light); }
+
+  .col-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; font-size: 10.5px; color: var(--text-2); }
+  .col-legend span b { color: var(--text); font-family: var(--mono); }
+
+  /* ---------- SCORE DEFINITIONS ---------- */
+  .score-defs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .score-def {
+    border: 1px solid var(--border); border-radius: 5px; background: var(--surface);
+    padding: 13px 15px; display: flex; flex-direction: column; gap: 7px;
+  }
+  .score-def-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .score-def-name { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--need); letter-spacing: .02em; }
+  .score-def-max {
+    font-family: var(--mono); font-size: 10px; color: var(--text-2);
+    border: 1px solid var(--border-light); border-radius: 2px; padding: 2px 6px; white-space: nowrap;
+  }
+  .score-def p { font-size: 11px; color: var(--text-2); line-height: 1.65; margin: 0; }
+  .score-def p b { color: var(--text); font-weight: 600; }
+  @media (max-width: 760px) { .score-defs { grid-template-columns: 1fr; } }
+
+  /* ---------- GEO MAP ---------- */
+  .geo-map { margin: 8px 0 28px; }
+  .geo-map-frame {
+    border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+    background: #0a0a0a;
+  }
+  .geo-caption { font-size: 11px; color: var(--text-2); line-height: 1.7; margin-top: 12px; }
+  .geo-map svg circle { transition: fill-opacity .15s; }
+  .geo-map svg g:hover circle { fill-opacity: 0.95; }
+
+  /* ---------- TAM / ADDRESSABLE UNIVERSE ---------- */
+  .stat-value.stat-hot { color: var(--fit); }
+  .tam { margin-top: 14px; display: flex; flex-direction: column; gap: 14px; }
+  .tam-headline { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  .tam-num {
+    font-family: var(--mono); font-size: 40px; font-weight: 700; color: var(--fit);
+    font-variant-numeric: tabular-nums; line-height: 1; flex-shrink: 0;
+  }
+  .tam-text { font-size: 13px; color: var(--text-2); line-height: 1.7; flex: 1; min-width: 260px; }
+  .tam-text b { color: var(--text); font-weight: 600; }
+  .tam-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .tam-cell {
+    border: 1px solid var(--border); border-left: 3px solid var(--fit-border);
+    border-radius: 4px; background: var(--surface); padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .tam-cell .v { font-family: var(--mono); font-size: 21px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+  .tam-cell .l { font-size: 11px; color: var(--text-2); line-height: 1.45; }
+  .tam-note { font-size: 11px; color: var(--text-3); line-height: 1.6; }
+  @media (max-width: 640px) { .tam-grid { grid-template-columns: 1fr; } }
+  .tam-grid-4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 760px) { .tam-grid-4 { grid-template-columns: repeat(2, 1fr); } }
+
+  @media (max-width: 600px) {
+    .header-title { font-size: 21px; }
+    .product-name, .topic-name { min-width: 120px; }
+    .header-stats { gap: 20px; }
+    .weight-legend { gap: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- NAV -->
+  <nav class="topnav" aria-label="Section navigation">
+    <span class="topnav-brand">▲ Vercel <span>Lookalikes</span></span>
+    <a href="#architecture">Scoring Framework</a>
+    <a href="#fit">Fit</a>
+    <a href="#need">Need</a>
+    <a href="#intent">Intent</a>
+    <a href="#sample">Sample Accounts</a>
+    <a href="#enable">Enable Sales</a>
+  </nav>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-eyebrow">HG Insights · ICTP · Customer: Vercel</div>
+    <h1 class="header-title">Vercel Enterprise Customer Lookalikes</h1>
+    <p class="header-desc">A lookalike scoring model built from ~5,000 confirmed Vercel enterprise accounts through HG's technographic tracking. This was done until Vercel shares their Enterprise customer list with HG. After that, the scoring criteria will be re-assessed and updated and new sample accounts will be identified and scored.</p>
+    <p class="header-desc">We scored every company in the HG database on firmographic similarity (scale, industry, IT spend) and technographic alignment (modern web stack, cloud-native infrastructure, headless architecture) to surface whitespace prospects that mirror the known enterprise base.</p>
+    <div class="header-stats">
+      <div class="stat"><span class="stat-value">4,972</span><span class="stat-label">Seed accounts</span></div>
+      <div class="stat"><span class="stat-value stat-hot">53,987</span><span class="stat-label">Good-target accounts</span></div>
+      <div class="stat"><span class="stat-value">Next.js</span><span class="stat-label">Target signal</span></div>
+      <div class="stat"><span class="stat-value">Global</span><span class="stat-label">Geography</span></div>
+      <div class="stat"><span class="stat-value">55 / 30 / 15</span><span class="stat-label">Fit / Need / Intent</span></div>
+    </div>
+  </header>
+
+  <!-- ARCHITECTURE -->
+  <details class="architecture section-collapse" id="architecture" open>
+    <summary class="sec-sum"><span class="section-eyebrow">The Scoring Framework</span><span class="chev">›</span></summary>
+    <div class="weight-bar-wrap">
+      <div class="weight-seg fit"    style="width:55%"></div>
+      <div class="weight-seg need"   style="width:30%"></div>
+      <div class="weight-seg intent" style="width:15%"></div>
+    </div>
+    <div class="weight-legend">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:var(--fit)"></div>
+        <span class="legend-pct" style="color:var(--fit)">55%</span>
+        <span class="legend-label">Fit — firmographic similarity + dev/cloud spend</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:var(--need)"></div>
+        <span class="legend-pct" style="color:var(--need)">30%</span>
+        <span class="legend-label">Need — technographic stack + GenAI maturity</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:var(--intent)"></div>
+        <span class="legend-pct" style="color:var(--intent)">15%</span>
+        <span class="legend-label">Intent — active research on adjacent platforms</span>
+      </div>
+    </div>
+    <div class="section-eyebrow">Tier Thresholds</div>
+    <div class="tier-row">
+      <div class="tier-chip tier-A"><span class="tier-letter">A</span><span class="tier-score">≥ 75</span></div>
+      <div class="tier-chip tier-B"><span class="tier-letter">B</span><span class="tier-score">≥ 55</span></div>
+      <div class="tier-chip tier-C"><span class="tier-letter">C</span><span class="tier-score">≥ 35</span></div>
+      <div class="tier-chip tier-D"><span class="tier-letter">D</span><span class="tier-score">≥ 15</span></div>
+    </div>
+
+    <div class="section-eyebrow" style="margin-top:28px;">Addressable Universe</div>
+    <div class="tam">
+      <div class="tam-headline">
+        <span class="tam-num">53,987</span>
+        <span class="tam-text">companies in the HG database run <b>Next.js</b> — Vercel's own framework and the warmest possible fit signal. Counted at global-parent level with no revenue floor, this is the full Next.js installed base the model can score and prioritize; the 60 sampled accounts below are a slice of it.</span>
+      </div>
+      <div class="tam-grid tam-grid-4">
+        <div class="tam-cell"><span class="v">2,933</span><span class="l">$1B+ revenue</span></div>
+        <div class="tam-cell"><span class="v">3,804</span><span class="l">$100M – $1B revenue</span></div>
+        <div class="tam-cell"><span class="v">16,161</span><span class="l">$10M – $100M revenue</span></div>
+        <div class="tam-cell"><span class="v">31,089</span><span class="l">Under $10M / undisclosed</span></div>
+      </div>
+      <div class="tam-note">Next.js installs at global-parent level (subsidiaries rolled up). The large sub-$100M and undisclosed-revenue tail is mostly startups and scale-ups — strong product-fit, lower immediate ACV — so the model's Fit weighting still prioritizes the ~6,700 companies at $100M+ within this base. Full per-account Tier A/B scoring across the universe is the production run.</div>
+    </div>
+  </details>
+
+
+  <!-- FIT -->
+  <details class="score-section section-collapse" id="fit" open>
+    <summary class="sec-sum sec-sum-head">
+    <div class="section-header">
+      <span class="section-title fit">Fit</span>
+      <span class="section-weight">55% of composite score · 4 dimensions · max 100 pts</span>
+      <span class="section-note">Firmographic + budget profile derived from the 4,972 seed accounts. Revenue, headcount and industry mirror the seed distribution; Dev + Cloud Spend Share (new) adds a budget-quality signal that separates digitally-led buyers from asset-heavy peers at the same revenue.</span>
+    </div><span class="chev">›</span>
+    </summary>
+
+    <div class="dim-grid">
+
+      <div class="dim-card fit">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">Revenue Scale</div>
+            <div class="dim-desc">Annual revenue brackets reflecting the enterprise tiers in the seed list. Rescaled to cap 35 to make room for Dev + Cloud Spend Share.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>35 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="table-wrap">
+            <table class="rules-table">
+              <thead>
+                <tr><th>Condition</th><th>Rationale</th><th>Points</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="rule-cond">Revenue ≥ $1 billion</td>
+                  <td><div class="rule-note">Top enterprise tier — 1,288 of 4,972 seed accounts</div></td>
+                  <td class="rule-pts pts-40">35</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Revenue $500M – $999M</td>
+                  <td><div class="rule-note">Upper mid-market enterprise</div></td>
+                  <td class="rule-pts pts-30">25</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Revenue $200M – $499M</td>
+                  <td><div class="rule-note">Core enterprise band — largest segment by count</div></td>
+                  <td class="rule-pts pts-20">16</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Revenue $100M – $199M</td>
+                  <td><div class="rule-note">Lower enterprise threshold</div></td>
+                  <td class="rule-pts pts-low">10</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="dim-card fit">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">Employee Scale</div>
+            <div class="dim-desc">Headcount bands calibrated to the seed list (modal band 1K–4,999). Rescaled to cap 20.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>20 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="table-wrap">
+            <table class="rules-table">
+              <thead>
+                <tr><th>Condition</th><th>Rationale</th><th>Points</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="rule-cond">10,000+ employees</td>
+                  <td><div class="rule-note">Largest enterprises — highest-ACV segment</div></td>
+                  <td class="rule-pts pts-40">20</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">5,000 – 9,999 employees</td>
+                  <td><div class="rule-note">Large enterprise, significant web infra complexity</div></td>
+                  <td class="rule-pts pts-30">18</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">1,000 – 4,999 employees</td>
+                  <td><div class="rule-note">Modal band in seed list — strongest lookalike signal</div></td>
+                  <td class="rule-pts pts-20">15</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">500 – 999 employees</td>
+                  <td><div class="rule-note">Lower enterprise threshold</div></td>
+                  <td class="rule-pts pts-low">10</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">200 – 499 employees</td>
+                  <td><div class="rule-note">Emerging enterprise — lower fit, in scope</div></td>
+                  <td class="rule-pts pts-low">5</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="dim-card fit">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">Industry Alignment</div>
+            <div class="dim-desc">Scored by vertical count and digital web intensity in the seed list. NAICS parent matching. Rescaled to cap 30.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>30 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="table-wrap">
+            <table class="rules-table">
+              <thead>
+                <tr><th>Industry (NAICS)</th><th>Rationale</th><th>Points</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="rule-cond">Technology, Software, Media, Telecom<div class="rule-note">NAICS 51, 54</div></td>
+                  <td><div class="rule-note">948 seed accounts — highest count; digital-first, highest web infra spend</div></td>
+                  <td class="rule-pts pts-40">30</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Retail Trade and eCommerce<div class="rule-note">NAICS 44, 45</div></td>
+                  <td><div class="rule-note">469 accounts; frontend performance is a direct revenue lever</div></td>
+                  <td class="rule-pts pts-30">27</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Financial Services and Insurance<div class="rule-note">NAICS 52</div></td>
+                  <td><div class="rule-note">586 accounts; high compliance, high digital web presence</div></td>
+                  <td class="rule-pts pts-20">24</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Travel, Hospitality, Entertainment<div class="rule-note">NAICS 71, 72</div></td>
+                  <td><div class="rule-note">Strong digital consumer experience focus</div></td>
+                  <td class="rule-pts pts-20">19</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Health Care and Life Sciences<div class="rule-note">NAICS 62</div></td>
+                  <td><div class="rule-note">319 accounts; patient portals and digital health</div></td>
+                  <td class="rule-pts pts-20">17</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Manufacturing and Industrial<div class="rule-note">NAICS 31, 32, 33</div></td>
+                  <td><div class="rule-note">620 accounts; digital commerce and dealer portals</div></td>
+                  <td class="rule-pts pts-20">15</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Wholesale, Logistics, Transportation<div class="rule-note">NAICS 42, 48, 49</div></td>
+                  <td><div class="rule-note">346 accounts; B2B digital portals</div></td>
+                  <td class="rule-pts pts-low">13</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Construction and Real Estate<div class="rule-note">NAICS 23, 53</div></td>
+                  <td><div class="rule-note">224 accounts; property portals</div></td>
+                  <td class="rule-pts pts-low">10</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Education<div class="rule-note">NAICS 61</div></td>
+                  <td><div class="rule-note">181 accounts; digital learning platforms</div></td>
+                  <td class="rule-pts pts-low">10</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Government and Public Administration<div class="rule-note">NAICS 92</div></td>
+                  <td><div class="rule-note">181 accounts but lower commercial web platform propensity</div></td>
+                  <td class="rule-pts pts-low">7</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="dim-card fit">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">Dev and Cloud Spend Share</div>
+            <div class="dim-desc">Bonus signal — share of IT budget in application development and cloud deployment (App-Dev + PaaS/IaaS + Cloud Services + CMS). Separates digitally-led companies from asset-heavy peers at the same revenue; accounts with no spend data are not penalized.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>15 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="table-wrap">
+            <table class="rules-table">
+              <thead>
+                <tr><th>% of IT budget in dev + cloud</th><th>Rationale</th><th>Points</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="rule-cond">25% – 45% share</td>
+                  <td><div class="rule-note">Heavy app-dev / cloud investment — ideal Vercel profile</div></td>
+                  <td class="rule-pts pts-40">15</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">45%+ share</td>
+                  <td><div class="rule-note">Very high — likely a software company itself</div></td>
+                  <td class="rule-pts pts-30">12</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">10% – 25% share</td>
+                  <td><div class="rule-note">Moderate modern-stack investment</div></td>
+                  <td class="rule-pts pts-20">7</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">< 10% share</td>
+                  <td><div class="rule-note">Low dev/cloud focus</div></td>
+                  <td class="rule-pts pts-low">2</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+  <!-- NEED -->
+  <details class="score-section section-collapse" id="need" open>
+    <summary class="sec-sum sec-sum-head">
+    <div class="section-header">
+      <span class="section-title need">Need</span>
+      <span class="section-weight">30% of composite score · 4 dimensions · max 100 pts</span>
+      <span class="section-note">Technology install signals indicating a modern web architecture and AI-building capability. GenAI Maturity (new) rewards breadth of adopted AI tooling — these companies need fast frontends to ship AI features.</span>
+    </div><span class="chev">›</span>
+    </summary>
+
+    <div class="dim-grid">
+
+      <div class="dim-card need">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">Modern Web Framework Stack</div>
+            <div class="dim-desc">JavaScript/TypeScript framework installs that run on or integrate natively with Vercel's platform. Rescaled to cap 40.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>40 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="subgroup">
+            <div class="subgroup-head">
+              <span class="subgroup-name">Vercel-Native Frameworks</span>
+              <span class="subgroup-cap">cap 27 pts</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Next.js</span>
+              <span class="product-signal">Vercel's own framework — strongest possible fit signal</span>
+              <span class="product-pts" style="color:var(--need)">18</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Nuxt</span>
+              <span class="product-signal">Vue-based SSR framework deployable on Vercel</span>
+              <span class="product-pts" style="color:var(--need)">9</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Gatsby</span>
+              <span class="product-signal">React-based static site framework on Vercel</span>
+              <span class="product-pts" style="color:var(--need)">7</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Remix</span>
+              <span class="product-signal">React meta-framework with Vercel adapter</span>
+              <span class="product-pts" style="color:var(--need)">7</span>
+            </div>
+          </div>
+
+          <div class="subgroup">
+            <div class="subgroup-head">
+              <span class="subgroup-name">Core JavaScript Ecosystem</span>
+              <span class="subgroup-cap">cap 13 pts</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">React</span>
+              <span class="product-signal">Foundation for Next.js and most Vercel-hosted apps</span>
+              <span class="product-pts" style="color:var(--need)">9</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Vue.js</span>
+              <span class="product-signal">Popular frontend framework deployed on Vercel</span>
+              <span class="product-pts" style="color:var(--text-2)">6</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Angular</span>
+              <span class="product-signal">Enterprise JavaScript framework — modernization indicator</span>
+              <span class="product-pts" style="color:var(--text-2)">5</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">TypeScript</span>
+              <span class="product-signal">Engineering maturity signal</span>
+              <span class="product-pts" style="color:var(--text-2)">5</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Node.js</span>
+              <span class="product-signal">Server runtime for serverless functions</span>
+              <span class="product-pts" style="color:var(--text-2)">4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dim-card need">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">Cloud-Native Deployment Infrastructure</div>
+            <div class="dim-desc">Hosting, container orchestration, and CI/CD tools. Competing frontend hosts score highest as displacement targets. Rescaled to cap 25.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>25 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="subgroup">
+            <div class="subgroup-head">
+              <span class="subgroup-name">Displacement Targets</span>
+              <span class="subgroup-cap">cap 15 pts</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Netlify</span>
+              <span class="product-signal">Direct Vercel competitor — strong displacement opportunity</span>
+              <span class="product-pts" style="color:var(--need)">12</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">AWS Amplify</span>
+              <span class="product-signal">Direct Vercel competitor for frontend hosting on AWS</span>
+              <span class="product-pts" style="color:var(--need)">12</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Cloudflare Pages</span>
+              <span class="product-signal">Competing edge deployment platform</span>
+              <span class="product-pts" style="color:var(--text-2)">9</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">AWS Elastic Beanstalk</span>
+              <span class="product-signal">PaaS hosting Vercel can replace for frontend workloads</span>
+              <span class="product-pts" style="color:var(--text-2)">6</span>
+            </div>
+          </div>
+
+          <div class="subgroup">
+            <div class="subgroup-head">
+              <span class="subgroup-name">Cloud-Native Maturity</span>
+              <span class="subgroup-cap">cap 10 pts</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Kubernetes</span>
+              <span class="product-signal">Container orchestration signals cloud-native engineering teams</span>
+              <span class="product-pts" style="color:var(--need)">7</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Docker</span>
+              <span class="product-signal">Containerization signals DevOps maturity</span>
+              <span class="product-pts" style="color:var(--text-2)">5</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Terraform</span>
+              <span class="product-signal">Infrastructure-as-code signals mature engineering org</span>
+              <span class="product-pts" style="color:var(--text-2)">5</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">GitHub Actions</span>
+              <span class="product-signal">Aligns with Vercel's GitHub-native deploy workflow</span>
+              <span class="product-pts" style="color:var(--text-2)">5</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">GitLab CI</span>
+              <span class="product-signal">CI/CD pipeline adoption</span>
+              <span class="product-pts" style="color:var(--text-2)">4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dim-card need">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">Headless and Composable Architecture</div>
+            <div class="dim-desc">Companies building decoupled frontends with headless CMS or commerce are Vercel's most natural buyers — these stacks almost always need a dedicated frontend deployment platform.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>20 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="subgroup">
+            <div class="subgroup-head">
+              <span class="subgroup-name">Headless CMS</span>
+              <span class="subgroup-cap">cap 12 pts</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Contentful</span>
+              <span class="product-signal">Leading headless CMS — frequently co-deployed with Vercel/Next.js</span>
+              <span class="product-pts" style="color:var(--need)">10</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Sanity</span>
+              <span class="product-signal">Developer-first headless CMS with native Vercel integration</span>
+              <span class="product-pts" style="color:var(--text-2)">8</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Prismic</span>
+              <span class="product-signal">Headless CMS commonly used in Next.js projects</span>
+              <span class="product-pts" style="color:var(--text-2)">6</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Strapi</span>
+              <span class="product-signal">Open-source headless CMS deployed with Node.js backends</span>
+              <span class="product-pts" style="color:var(--text-2)">6</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Storyblok</span>
+              <span class="product-signal">Headless CMS with visual editor — composable stack signal</span>
+              <span class="product-pts" style="color:var(--text-2)">6</span>
+            </div>
+          </div>
+
+          <div class="subgroup">
+            <div class="subgroup-head">
+              <span class="subgroup-name">Headless Commerce</span>
+              <span class="subgroup-cap">cap 10 pts</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Shopify</span>
+              <span class="product-signal">Shopify Hydrogen uses React and deploys to edge — core composable commerce use case</span>
+              <span class="product-pts" style="color:var(--need)">8</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">commercetools</span>
+              <span class="product-signal">Headless commerce platform that pairs with Vercel frontends</span>
+              <span class="product-pts" style="color:var(--text-2)">8</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">BigCommerce</span>
+              <span class="product-signal">Headless commerce with Vercel-compatible frontend stack</span>
+              <span class="product-pts" style="color:var(--text-2)">6</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Elastic Path</span>
+              <span class="product-signal">Composable commerce platform</span>
+              <span class="product-pts" style="color:var(--text-2)">5</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dim-card need">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">GenAI Maturity</div>
+            <div class="dim-desc">Breadth of generative-AI stack adoption — foundation-model APIs plus AI application infrastructure. Companies building AI features need fast frontends to ship them (Vercel AI SDK / v0 / AI Gateway lever); more of the AI stack adopted = more mature = warmer. New dimension, cap 15.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>15 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="subgroup">
+            <div class="subgroup-head">
+              <span class="subgroup-name">Foundation Model APIs</span>
+              <span class="subgroup-cap">cap 9 pts</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">OpenAI</span>
+              <span class="product-signal">GenAI vendor adoption — building AI features</span>
+              <span class="product-pts" style="color:var(--need)">5</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Anthropic</span>
+              <span class="product-signal">GenAI vendor adoption — building AI features</span>
+              <span class="product-pts" style="color:var(--need)">5</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Azure OpenAI</span>
+              <span class="product-signal">Enterprise GenAI investment</span>
+              <span class="product-pts" style="color:var(--text-2)">4</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Google Vertex AI</span>
+              <span class="product-signal">Cloud AI/ML investment</span>
+              <span class="product-pts" style="color:var(--text-2)">3</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Amazon Bedrock</span>
+              <span class="product-signal">Enterprise foundation-model platform</span>
+              <span class="product-pts" style="color:var(--text-2)">3</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Cohere</span>
+              <span class="product-signal">LLM API adoption</span>
+              <span class="product-pts" style="color:var(--text-2)">3</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Mistral AI</span>
+              <span class="product-signal">Open-weight foundation-model adoption</span>
+              <span class="product-pts" style="color:var(--text-2)">2</span>
+            </div>
+          </div>
+
+          <div class="subgroup">
+            <div class="subgroup-head">
+              <span class="subgroup-name">AI Application Infrastructure</span>
+              <span class="subgroup-cap">cap 8 pts</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Pinecone</span>
+              <span class="product-signal">Vector DB — RAG / AI app build</span>
+              <span class="product-pts" style="color:var(--need)">4</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">LangChain</span>
+              <span class="product-signal">LLM orchestration — building AI applications</span>
+              <span class="product-pts" style="color:var(--need)">4</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Hugging Face</span>
+              <span class="product-signal">Open-model adoption — active AI development</span>
+              <span class="product-pts" style="color:var(--text-2)">3</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Weaviate</span>
+              <span class="product-signal">Vector DB — RAG / AI app build</span>
+              <span class="product-pts" style="color:var(--text-2)">3</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">Databricks</span>
+              <span class="product-signal">ML/data platform — AI maturity</span>
+              <span class="product-pts" style="color:var(--text-2)">3</span>
+            </div>
+            <div class="product-row">
+              <span class="product-name">LlamaIndex</span>
+              <span class="product-signal">RAG framework — AI app development</span>
+              <span class="product-pts" style="color:var(--text-2)">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+  <!-- INTENT -->
+  <details class="score-section section-collapse" id="intent" open>
+    <summary class="sec-sum sec-sum-head">
+    <div class="section-header">
+      <span class="section-title intent">Intent</span>
+      <span class="section-weight">15% of composite score · max 100 pts</span>
+      <span class="section-note">Active research signals on developer platforms, competing deployment tools, and cloud/commerce infrastructure. Confirms in-market timing on top of a strong Fit + Need profile.</span>
+    </div><span class="chev">›</span>
+    </summary>
+
+    <div class="dim-grid">
+
+      <!-- Developer Platform and Deployment Intent -->
+      <div class="dim-card intent">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">Developer Platform and Deployment Intent</div>
+            <div class="dim-desc">Research on GitHub (Vercel's native ecosystem), CI/CD automation, and competing frontend hosting solutions — indicates active evaluation of deployment infrastructure.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>60 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="table-wrap">
+            <table class="rules-table">
+              <thead>
+                <tr><th>Topic</th><th>Signal</th><th>Max pts</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="rule-cond">Github Enterprise</td>
+                  <td><div class="rule-note">Enterprise-scale developer platform research — Vercel integrates natively with GitHub at org level</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">18</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">GitHub Actions</td>
+                  <td><div class="rule-note">CI/CD automation research — Vercel's deploy workflow is GitHub Actions-compatible</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">15</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">GitHub</td>
+                  <td><div class="rule-note">Developer platform research — strong proxy for modern engineering teams building in Vercel's native ecosystem</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">12</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">AWS Amplify</td>
+                  <td><div class="rule-note">Researching a direct Vercel competitor — confirms active deployment platform evaluation</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">12</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Cloudflare CDN</td>
+                  <td><div class="rule-note">CDN and edge performance research — adjacent to Vercel's Edge Network value proposition</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">10</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Cloudflare</td>
+                  <td><div class="rule-note">Competing edge platform research — confirms performance and deployment infrastructure is being evaluated</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">8</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cloud and Commerce Platform Research -->
+      <div class="dim-card intent">
+        <div class="dim-head">
+          <div>
+            <div class="dim-name">Cloud and Commerce Platform Research</div>
+            <div class="dim-desc">Research on cloud infrastructure, container orchestration, and commerce platforms — signals digital investment appetite and web modernization trajectory.</div>
+          </div>
+          <div class="dim-cap-badge">Cap <span>40 pts</span></div>
+        </div>
+        <div class="dim-body">
+          <div class="table-wrap">
+            <table class="rules-table">
+              <thead>
+                <tr><th>Topic</th><th>Signal</th><th>Max pts</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="rule-cond">Shopify (SHOP)</td>
+                  <td><div class="rule-note">Commerce platform research at enterprise scale — headless Shopify deployments commonly land on Vercel</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">14</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Kubernetes</td>
+                  <td><div class="rule-note">Container orchestration research — cloud-native engineering teams that also need managed frontend deployment</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">10</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Amazon CloudFront</td>
+                  <td><div class="rule-note">CDN and edge delivery research — companies evaluating CloudFront are in Vercel's competitive swim lane</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">8</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">AWS Cloud</td>
+                  <td><div class="rule-note">Broad cloud platform research — confirms digital infrastructure investment and cloud-native trajectory</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">7</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">Web Development</td>
+                  <td><div class="rule-note">General web development research — broad confirmatory signal for digital presence investment</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">6</td>
+                </tr>
+                <tr>
+                  <td class="rule-cond">AWS Elastic Beanstalk</td>
+                  <td><div class="rule-note">PaaS hosting research — Vercel can displace Beanstalk for frontend workloads</div></td>
+                  <td class="rule-pts" style="color:var(--intent)">5</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+  <!-- SAMPLE SCORED ACCOUNTS -->
+  <details class="sample section-collapse" id="sample" open>
+    <summary class="sec-sum"><span class="section-eyebrow">Sample · 60 Scored Whitespace Accounts</span><span class="chev">›</span></summary>
+    <p class="sample-intro">Sixty real companies pulled from the <b>53,987-account Next.js good-target universe</b> above, scored live through this model. Every account shown is <b>verified whitespace</b> — cross-checked against your customer list by HG company ID, company name, <i>and</i> corporate-parent / global-HQ hierarchy, so no existing Vercel customer or customer subsidiary appears here. Each runs at least one Vercel-affinity signal (Next.js, a competing host, or a headless stack) at $100M+ revenue, spanning 21 country markets. Columns: F / N / I are the Fit / Need / Intent composites; <b>Spend</b> is the Dev + Cloud spend-share sub-score (max 15) and <b>GenAI</b> is the GenAI Maturity sub-score (max 15) that feed Fit and Need respectively.</p>
+
+    <div class="sample-stats">
+      <div class="sample-stat"><span class="v">60</span><span class="l">Scored</span></div>
+      <div class="sample-stat tA"><span class="v">27</span><span class="l">Tier A</span></div>
+      <div class="sample-stat tB"><span class="v">25</span><span class="l">Tier B</span></div>
+      <div class="sample-stat f500"><span class="v">4</span><span class="l">Fortune 500</span></div>
+      <div class="sample-stat g2000"><span class="v">28</span><span class="l">Forbes G2000</span></div>
+    </div>
+
+    <div class="geo-map">
+      <div class="section-eyebrow" style="margin-bottom:12px;">Geographic Distribution · 21 country markets</div>
+      <div class="geo-map-frame">
+        <svg viewBox="0 0 1000 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="World map of the 60 sampled accounts by country" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+  <defs><clipPath id="frame"><rect x="0" y="0" width="1000" height="500"/></clipPath></defs>
+  <rect x="0" y="0" width="1000" height="500" fill="#0a0a0a"/>
+  <g clip-path="url(#frame)">
+    <path d="M311.8,399.6L315.4,401.3L319.3,401.9L318.1,403.3L315.4,403.5L314.0,402.5L313.1,403.6L310.7,404.5L307.7,404.2L305.7,403.3L302.8,402.9L299.3,401.4L296.4,399.9L292.6,396.8L294.9,397.4L298.8,399.2L302.5,400.2L303.9,398.9L304.8,397.0L307.4,395.9L309.4,396.2L310.4,397.5L311.8,399.6Z M337.4,391.9L339.6,393.2L338.8,394.2L335.0,395.0L333.8,394.0L331.4,395.3L330.0,394.0L333.3,392.4L335.7,393.1L337.4,391.9Z M695.2,388.1L691.0,388.3L690.9,386.8L691.3,385.6L691.5,385.1L693.3,385.9L695.9,386.3L696.0,386.8L695.2,388.1Z M903.9,363.3L906.6,364.3L908.1,363.9L910.2,363.4L911.9,363.5L912.1,366.8L911.2,367.8L910.9,370.0L909.9,369.3L908.0,371.2L907.4,371.1L905.7,371.0L904.0,368.6L903.6,366.8L902.0,364.3L902.1,363.1L903.9,363.3Z M980.6,363.7L981.2,364.8L983.2,363.7L984.0,364.9L984.0,366.0L983.0,367.3L981.2,369.4L979.7,370.5L980.8,371.8L978.6,371.8L976.3,372.9L975.5,374.7L973.9,377.5L971.7,378.8L970.4,379.6L967.8,379.5L966.0,378.6L963.0,378.4L962.5,377.4L964.0,375.3L967.5,372.6L969.3,372.0L971.3,371.0L973.7,369.5L975.3,368.1L976.6,366.0L977.6,365.3L978.0,363.8L980.0,362.5L980.6,363.7Z M985.0,350.4L987.0,353.4L987.1,351.5L988.4,352.2L988.8,354.3L991.0,355.2L992.9,355.4L994.5,354.4L995.9,354.7L995.2,357.2L994.4,358.8L992.2,358.7L991.5,359.6L991.8,360.8L991.3,361.3L990.3,362.8L988.9,364.7L986.8,365.8L986.3,365.1L985.1,364.7L986.7,362.4L985.8,360.9L982.8,359.7L982.9,358.7L984.9,357.8L985.4,355.6L985.3,353.8L984.1,352.0L984.2,351.5L982.9,350.3L980.7,347.9L979.5,345.9L980.6,345.7L982.1,347.2L984.2,348.0L985.0,350.4Z M964.2,311.6L963.2,312.2L961.6,311.5L959.6,310.2L957.9,308.7L956.0,306.8L955.6,305.8L956.8,305.9L958.4,306.8L959.6,307.8L960.5,308.6L962.8,310.3L964.2,311.6Z M995.5,298.2L996.4,299.0L996.0,300.4L994.3,300.8L992.7,300.5L992.5,299.2L993.5,298.3L994.8,298.6L995.5,298.2Z M966.2,295.7L965.3,296.1L964.4,294.9L964.5,294.1L966.2,295.7Z M964.2,291.5L964.6,293.7L963.9,293.4L963.3,293.5L962.9,292.8L962.9,290.6L964.2,291.5Z M639.0,287.7L639.5,291.0L640.2,292.3L639.9,293.6L639.4,294.4L638.5,292.8L638.0,293.6L638.5,295.7L638.3,296.9L637.5,297.5L637.3,299.9L636.2,303.1L634.9,306.9L633.1,312.2L632.1,316.1L630.8,319.3L628.6,319.9L626.1,321.1L624.5,320.4L622.3,319.4L621.6,317.9L621.4,315.5L620.4,313.3L620.1,311.3L620.6,309.3L621.9,308.8L621.9,307.9L623.3,305.8L623.5,304.0L622.9,302.7L622.3,300.9L622.1,298.4L623.1,296.8L623.5,295.0L624.8,294.9L626.4,294.4L627.4,293.9L628.6,293.8L630.2,292.3L632.5,290.5L633.3,289.1L633.0,288.0L634.1,288.3L635.7,286.4L635.7,284.7L636.7,283.4L637.6,284.6L638.4,285.8L639.0,287.7Z M898.8,288.2L899.8,290.4L901.6,289.4L902.5,290.5L903.8,291.6L903.5,292.9L904.1,295.2L904.5,296.6L905.2,297.0L906.0,299.3L905.7,300.8L906.6,302.7L909.6,304.1L911.6,305.4L913.5,306.6L913.1,307.3L914.7,309.1L915.8,312.1L916.9,311.5L918.0,312.7L918.7,312.2L919.2,315.2L921.1,316.9L922.4,317.9L924.6,320.2L925.4,322.4L925.4,324.0L925.3,325.7L926.6,328.1L926.4,330.5L925.9,331.8L925.2,334.3L925.2,335.9L924.7,337.9L923.5,340.4L921.4,341.8L920.4,343.9L919.5,345.3L918.6,347.7L917.6,349.1L916.9,351.2L916.5,353.1L916.7,354.0L915.1,354.9L912.0,355.0L909.4,356.2L908.1,357.2L906.4,358.4L904.1,357.2L902.4,356.7L902.9,355.3L901.3,355.8L898.9,357.8L896.5,357.1L894.9,356.6L893.3,356.4L890.7,355.6L888.9,353.9L888.3,351.8L887.7,350.4L886.3,349.3L883.7,348.9L884.6,347.6L883.9,345.5L882.5,347.4L880.1,347.9L881.5,346.4L882.0,344.8L883.0,343.4L882.8,341.4L880.5,343.8L878.8,344.7L877.7,346.9L875.6,345.8L875.7,344.3L873.9,342.3L872.5,341.2L873.0,340.6L869.4,338.9L867.5,338.8L864.8,337.5L859.8,337.8L856.2,338.7L853.1,339.7L850.4,339.5L847.5,340.9L845.1,341.6L844.5,343.0L843.5,344.1L841.1,344.2L839.4,344.5L836.9,343.9L834.9,344.3L833.0,344.4L831.4,345.9L830.6,345.7L829.2,346.5L827.8,347.4L825.8,347.3L824.0,347.3L821.0,345.5L819.5,345.0L819.6,343.4L821.0,343.0L821.4,342.4L821.3,341.4L821.7,339.5L821.4,337.8L819.9,335.0L819.4,333.4L819.6,331.8L818.4,330.0L818.4,329.2L817.1,328.1L816.8,325.9L815.2,323.7L814.8,322.5L816.0,323.7L815.1,321.2L816.5,322.0L817.3,323.1L817.3,321.6L815.9,319.4L815.6,318.6L815.0,317.7L815.3,316.1L815.8,315.4L816.2,314.1L815.9,312.4L817.1,310.4L817.3,312.5L818.5,310.6L820.7,309.7L822.1,308.5L824.2,307.5L825.5,307.3L826.2,307.6L828.4,306.6L830.1,306.3L830.5,305.7L831.3,305.4L832.8,305.5L835.7,304.7L837.2,303.4L837.9,302.0L839.6,300.5L839.7,299.4L839.8,297.9L841.7,295.6L842.9,298.0L844.1,297.4L843.1,296.1L843.9,294.8L845.2,295.4L845.5,293.2L847.0,291.9L847.7,290.8L849.1,290.3L849.1,289.5L850.3,289.9L850.4,289.2L851.6,288.8L853.0,288.4L855.0,289.7L856.6,291.3L858.3,291.3L860.1,291.6L859.5,290.1L860.8,287.8L862.1,287.1L861.6,286.4L862.8,284.8L864.5,283.8L865.9,284.2L868.3,283.7L868.2,282.2L866.2,281.3L867.7,280.9L869.5,281.6L871.0,282.7L873.3,283.4L874.1,283.2L875.8,284.0L877.4,283.2L878.5,283.5L879.1,282.9L880.4,284.3L879.7,285.8L878.6,286.9L877.7,287.0L878.0,288.1L877.2,289.5L876.2,290.9L876.4,291.7L878.6,293.2L880.7,294.1L882.2,295.0L884.2,296.7L885.0,296.7L886.4,297.4L886.8,298.3L889.5,299.2L891.3,298.2L891.9,296.8L892.4,295.5L892.8,294.0L893.6,291.8L893.2,290.4L893.4,289.6L893.1,288.0L893.5,286.0L894.0,285.4L893.6,284.5L894.2,283.0L894.8,281.5L894.8,280.7L895.9,279.6L896.7,281.0L896.8,282.7L897.5,283.1L897.7,284.2L898.7,285.7L898.9,287.2L898.8,288.2Z M950.3,279.1L951.1,280.1L949.2,280.1L948.1,278.3L949.8,279.0L950.3,279.1Z M835.3,278.4L834.1,278.5L830.5,276.5L833.1,276.0L834.5,276.8L835.5,277.7L835.3,278.4Z M946.8,277.4L945.7,277.5L944.0,277.2L943.4,276.8L943.6,275.7L945.4,276.1L946.4,276.7L946.8,277.4Z M949.1,276.7L948.7,277.2L946.6,274.8L946.1,273.1L947.0,273.1L948.0,275.3L949.1,276.7Z M845.7,278.2L843.3,278.8L842.9,278.4L843.2,277.5L844.4,275.8L847.1,274.7L847.5,274.0L849.8,273.4L851.8,273.3L852.7,273.0L853.7,273.3L852.7,274.1L849.8,275.3L847.5,276.1L845.7,278.2Z M827.5,272.5L828.5,273.2L830.2,273.0L830.9,274.2L827.7,274.7L825.8,275.1L824.3,275.1L825.2,273.5L826.8,273.5L827.5,272.5Z M841.4,272.5L841.0,274.0L836.8,274.8L833.1,274.5L833.1,273.5L835.3,272.9L837.1,273.7L838.9,273.5L841.4,272.5Z M944.1,273.2L944.2,273.7L942.0,272.5L940.5,271.5L939.5,270.6L939.9,270.3L941.2,271.0L943.4,272.3L944.1,273.2Z M937.6,270.4L937.0,270.6L935.8,269.9L934.7,268.8L934.8,268.3L936.5,269.5L937.6,270.4Z M801.7,268.8L807.1,269.1L807.7,268.0L812.8,269.3L813.8,271.1L818.0,271.6L821.4,273.3L818.2,274.3L815.2,273.2L812.7,273.3L809.8,273.1L807.2,272.6L804.0,271.5L801.9,271.2L800.8,271.6L795.7,270.4L795.2,269.2L792.7,269.0L794.6,266.4L798.0,266.5L800.2,267.6L801.3,267.8L801.7,268.8Z M874.2,267.3L872.8,269.2L872.5,267.1L873.0,266.1L873.6,265.1L874.2,265.9L874.2,267.3Z M933.0,268.9L932.2,269.2L931.0,268.2L929.8,266.4L929.2,264.3L929.6,264.0L929.9,264.8L930.7,265.5L932.1,267.2L933.4,268.2L933.0,268.9Z M922.2,265.2L920.7,265.4L920.3,266.2L918.8,266.9L917.3,267.5L915.9,267.5L913.6,266.7L912.0,266.0L912.2,265.1L914.7,265.5L916.2,265.3L916.7,264.0L917.1,263.9L917.3,265.4L918.9,265.2L919.7,264.2L921.2,263.2L920.9,261.6L922.6,261.5L923.2,262.0L923.1,263.5L922.2,265.2Z M853.5,259.6L852.4,260.5L850.5,260.0L850.0,258.8L852.8,258.7L853.5,259.6Z M862.4,258.6L863.4,260.7L861.1,259.6L858.8,259.3L857.2,259.5L855.3,259.4L855.9,257.9L859.4,257.8L862.4,258.6Z M925.4,262.5L924.5,263.2L924.0,261.6L923.3,260.5L922.1,259.6L920.5,258.4L918.5,257.6L919.3,256.9L920.8,257.7L921.7,258.3L922.9,259.0L924.0,260.2L925.1,261.1L925.4,262.5Z M872.6,253.2L873.4,257.7L876.3,259.4L878.6,256.4L881.8,254.7L884.2,254.7L886.6,255.7L888.7,256.7L891.7,257.2L896.5,259.1L901.6,260.7L903.5,262.1L905.1,263.5L905.5,265.2L910.1,266.9L910.8,268.4L908.2,268.7L908.9,270.5L911.3,272.3L913.1,275.3L914.7,275.2L914.6,276.4L916.8,276.9L915.9,277.4L918.9,278.6L918.6,279.4L916.7,279.6L916.1,278.9L913.7,278.6L910.9,278.1L908.7,276.4L907.1,274.8L905.7,272.4L902.1,271.2L899.7,272.0L898.0,272.9L898.4,275.0L896.2,275.9L894.6,275.4L891.8,275.3L889.3,273.0L886.5,272.5L885.8,273.3L882.3,273.4L883.4,271.1L885.2,270.3L884.5,267.3L883.1,265.0L877.7,262.6L875.5,262.4L871.3,259.8L870.5,261.2L869.4,261.4L868.8,260.4L868.8,259.2L866.6,257.8L869.6,256.8L871.6,256.9L871.4,256.2L867.3,256.1L866.2,254.5L863.7,254.0L862.6,252.6L866.3,251.9L867.7,251.0L872.2,252.2L872.6,253.2Z M847.9,246.1L845.7,248.8L843.6,249.3L840.9,248.8L836.3,248.9L833.8,249.3L833.4,251.4L835.9,253.9L837.4,252.7L842.6,251.7L842.4,253.0L841.2,252.6L840.0,254.2L837.5,255.3L840.1,258.9L839.6,259.8L842.1,263.0L842.1,264.8L840.6,265.6L839.5,264.7L840.9,262.4L838.2,263.5L837.5,262.7L837.8,261.6L835.8,260.0L836.0,257.3L834.2,258.1L834.4,261.4L834.5,265.4L832.8,265.8L831.6,264.9L832.4,262.4L831.9,259.7L830.8,259.7L829.9,257.8L831.1,256.0L831.5,253.8L832.8,249.6L833.4,248.4L835.8,246.4L838.0,247.2L841.5,247.6L844.7,247.5L847.4,245.4L847.9,246.1Z M857.5,246.9L857.3,249.3L855.9,249.0L855.5,250.7L856.6,252.2L855.8,252.5L854.7,250.7L853.9,247.2L854.4,245.0L855.4,244.0L855.6,245.5L857.2,245.7L857.5,246.9Z M793.9,266.3L790.9,266.3L788.5,264.0L785.0,261.7L783.8,260.0L781.7,257.8L780.3,255.7L778.2,251.8L775.7,249.5L774.9,247.1L773.9,244.9L771.4,243.2L769.9,240.8L767.8,239.3L764.9,236.2L764.7,234.8L766.5,234.9L770.8,235.4L773.2,238.1L775.4,240.0L776.9,241.2L779.6,244.2L782.4,244.2L784.7,246.1L786.3,248.4L788.4,249.7L787.3,252.0L788.9,252.9L789.9,253.0L790.4,254.9L791.4,256.5L793.4,256.7L794.7,258.5L794.0,262.0L793.9,266.3Z M827.4,244.9L830.5,247.5L827.3,247.8L826.3,249.7L826.4,252.2L823.8,254.1L823.7,256.9L822.6,261.1L822.2,260.2L819.1,261.4L818.0,259.7L816.0,259.6L814.6,258.7L811.3,259.7L810.3,258.3L808.5,258.5L806.2,258.2L805.7,254.4L804.4,253.7L803.0,251.3L802.6,248.8L803.0,246.3L804.6,244.4L806.7,245.4L808.8,244.9L809.4,242.5L810.5,242.0L813.9,241.4L815.9,239.2L817.2,237.4L818.3,236.4L820.7,234.9L822.8,232.9L824.2,230.8L825.4,230.8L826.8,232.2L826.9,233.4L828.7,234.1L831.1,235.0L830.9,236.1L829.0,236.2L829.5,237.6L827.4,238.5L825.9,241.0L827.9,243.6L827.4,244.9Z M851.0,226.6L851.3,228.5L851.5,230.0L850.5,232.6L849.5,229.7L848.2,231.1L849.1,233.2L848.3,234.5L845.1,232.9L844.3,230.9L845.1,229.6L843.4,228.2L842.5,229.4L841.2,229.3L839.1,230.8L838.7,230.0L839.8,227.7L841.5,226.9L843.0,225.9L844.0,227.1L846.1,226.3L846.6,225.1L848.5,225.0L848.4,222.9L850.6,224.2L850.8,225.6L851.0,226.6Z M725.6,232.8L723.2,233.4L721.9,231.2L721.4,227.2L722.6,222.7L724.6,224.3L725.8,226.2L727.2,229.1L726.8,232.0L725.6,232.8Z M330.7,221.9L328.4,222.2L327.9,222.0L328.7,221.2L328.7,220.1L330.3,219.7L330.8,219.8L330.7,221.9Z M844.4,221.4L843.4,222.4L842.5,224.1L841.7,224.9L839.9,223.0L840.5,222.3L841.2,221.5L841.5,219.8L843.0,219.6L842.6,221.5L844.7,218.8L844.4,221.4Z M829.2,224.1L825.5,226.8L826.8,224.8L828.8,223.1L830.5,221.2L832.0,218.4L832.5,220.7L830.6,222.2L829.2,224.1Z M838.6,217.0L840.2,217.8L842.0,217.8L841.9,219.0L840.7,220.2L838.9,221.0L838.8,219.7L839.0,218.3L838.6,217.0Z M848.6,216.2L849.4,219.3L847.3,218.6L847.3,219.5L848.0,221.2L846.7,221.9L846.6,219.9L845.7,219.7L845.3,218.1L846.9,218.3L846.9,217.2L845.2,215.1L847.8,215.2L848.6,216.2Z M837.6,213.7L836.8,216.1L835.6,214.7L834.2,212.6L836.6,212.7L837.6,213.7Z M837.0,198.6L838.7,199.4L839.6,198.7L839.8,199.4L839.4,200.5L840.3,202.5L839.6,204.8L837.9,205.7L837.5,208.0L838.1,210.2L839.6,210.5L840.8,210.2L844.3,211.7L844.0,213.2L844.9,213.9L844.7,215.2L842.5,213.8L841.5,212.4L840.8,213.4L839.0,211.7L836.5,212.1L835.1,211.5L835.2,210.4L836.1,209.6L835.3,209.0L834.9,210.0L833.5,208.4L833.1,207.2L833.0,204.5L834.1,205.5L834.4,201.1L835.3,198.6L837.0,198.6Z M317.8,199.4L317.1,200.1L315.0,200.0L313.4,200.1L313.2,199.0L313.6,198.6L315.9,198.6L317.3,198.8L317.8,199.4Z M286.4,200.4L285.5,200.8L284.0,200.4L282.4,199.4L282.7,198.7L283.9,198.5L284.5,198.6L286.4,198.9L287.9,199.6L288.3,200.3L286.4,200.4Z M298.4,194.8L300.8,195.2L301.1,194.8L303.3,194.8L305.0,195.5L305.7,195.4L306.2,196.4L307.7,196.4L307.6,197.2L308.9,197.3L310.2,198.3L309.2,199.4L307.9,198.8L306.6,198.9L305.7,198.8L305.2,199.3L304.1,199.5L303.7,198.8L302.8,199.2L301.7,201.1L301.0,200.7L300.8,199.9L299.0,199.4L297.7,199.6L296.0,199.4L294.7,199.9L293.2,199.0L293.4,198.2L296.0,198.5L298.1,198.8L299.1,198.1L297.8,196.9L297.8,195.9L296.1,195.4L296.7,194.7L298.4,194.8Z M806.5,198.1L804.1,199.5L801.8,198.6L801.7,196.2L803.1,194.9L806.1,194.2L807.7,194.2L808.4,195.3L807.1,196.5L806.5,198.1Z M67.9,197.0L67.5,197.5L66.8,197.1L66.9,196.3L66.5,195.3L66.6,195.0L67.1,194.5L66.9,194.0L67.1,193.7L67.3,193.8L68.3,194.2L68.8,194.5L69.3,194.8L70.0,195.8L69.9,196.0L68.8,196.6L67.9,197.0Z M66.5,192.7L65.5,192.9L65.0,192.3L64.7,192.0L64.7,191.9L65.0,191.6L66.0,191.9L66.7,192.3L66.5,192.7Z M64.6,191.2L64.5,191.5L63.0,191.4L63.2,191.1L64.6,191.2Z M62.1,190.8L61.9,190.9L61.7,190.9L60.8,190.8L60.4,190.2L60.3,190.1L61.0,189.7L61.3,189.9L62.1,190.8Z M57.4,188.9L57.0,189.2L56.1,188.7L56.3,188.5L56.7,188.2L57.3,188.3L57.4,188.9Z M278.7,186.8L279.8,187.8L282.4,187.5L283.4,188.1L285.7,189.8L287.4,191.1L288.4,191.1L290.0,191.6L289.8,192.4L291.9,192.5L294.0,193.7L293.6,194.3L291.8,194.7L289.9,194.8L288.0,194.6L284.0,194.8L285.9,193.3L284.7,192.6L283.0,192.4L282.0,191.6L281.3,190.0L279.8,190.1L277.2,189.4L276.3,188.8L272.7,188.4L271.8,187.8L272.8,187.1L270.1,187.0L268.1,188.4L266.9,188.5L266.5,189.1L265.1,189.4L264.0,189.2L265.4,188.3L266.0,187.3L267.3,186.7L268.7,186.2L270.8,185.9L271.5,185.6L273.9,185.8L276.1,185.8L278.7,186.8Z M284.6,184.0L283.9,184.1L283.2,182.5L282.2,181.7L282.8,180.0L283.6,180.1L284.6,182.4L284.6,184.0Z M836.6,186.7L835.4,189.0L833.9,186.6L833.6,184.6L835.3,181.8L837.5,179.7L838.8,180.6L838.3,182.2L836.6,186.7Z M283.8,176.2L280.8,176.6L280.6,175.6L281.9,175.4L283.8,175.4L283.8,176.2Z M286.1,176.1L285.6,178.1L285.1,177.8L285.2,176.3L283.9,175.2L283.9,174.9L286.1,176.1Z M874.0,155.1L874.3,156.1L872.8,157.8L871.6,156.9L870.2,157.5L869.5,159.2L867.7,158.4L867.7,157.0L869.2,155.4L870.8,155.7L872.0,154.5L874.0,155.1Z M596.0,150.9L594.2,152.1L594.4,152.6L594.5,152.8L591.6,154.0L590.2,153.6L589.6,152.5L590.9,152.4L591.1,152.4L591.5,151.7L593.5,151.7L596.0,150.9Z M565.8,150.8L567.4,151.8L569.5,151.6L571.6,151.8L571.5,152.3L573.0,151.9L572.7,152.8L568.7,153.0L568.7,152.5L565.3,152.0L565.8,150.8Z M543.1,143.8L542.1,146.0L542.5,146.9L541.9,148.3L539.8,147.2L538.4,146.9L534.5,145.5L534.9,144.1L538.2,144.3L541.0,144.0L543.1,143.8Z M525.6,135.5L527.2,137.5L526.9,141.2L525.6,141.0L524.5,141.9L523.4,141.2L523.3,137.8L522.7,136.2L524.2,136.4L525.6,135.5Z M891.6,146.8L890.6,149.0L891.0,150.4L889.6,152.4L886.0,153.7L881.2,153.9L877.2,157.0L875.3,156.0L875.2,153.9L870.4,154.5L867.1,155.8L863.8,155.9L866.7,157.9L864.8,162.6L863.0,163.8L861.7,162.7L862.4,160.2L860.6,159.4L859.5,157.5L862.1,156.7L863.5,154.9L866.3,153.5L868.4,151.6L873.9,150.7L876.9,151.3L879.8,146.4L881.6,147.7L885.7,144.9L887.3,143.8L889.0,140.4L888.6,137.3L889.7,135.6L892.7,135.1L894.2,138.9L894.1,141.2L891.6,144.0L891.6,146.8Z M526.6,132.9L525.6,135.1L524.4,134.5L523.7,132.6L524.3,131.6L526.1,130.5L526.6,132.9Z M899.7,127.3L901.7,127.9L903.7,126.7L904.3,129.8L900.2,130.6L897.7,133.3L893.4,131.4L891.8,134.5L888.8,134.5L888.4,131.8L889.8,129.6L892.7,129.5L893.5,125.6L894.4,123.5L897.6,126.4L899.7,127.3Z M323.2,120.7L325.2,121.1L327.7,121.0L326.4,122.1L325.4,122.3L321.8,121.1L321.1,120.2L322.2,119.3L323.2,120.7Z M328.3,113.6L327.0,113.6L323.4,112.8L320.8,111.5L321.7,111.2L325.4,111.9L328.2,113.1L328.3,113.6Z M156.9,115.3L155.5,115.6L151.0,114.4L150.1,113.4L147.6,112.4L147.1,111.6L144.3,111.1L143.2,109.6L143.5,109.0L146.4,109.6L148.1,110.0L150.7,110.3L151.6,111.3L153.0,112.6L155.8,113.7L156.9,115.3Z M344.1,109.2L342.2,111.6L344.0,110.7L345.9,111.3L344.9,112.3L347.4,113.0L348.7,112.3L351.5,113.2L350.6,115.2L352.5,114.8L352.9,116.2L353.8,118.0L352.6,120.4L351.3,120.5L349.5,120.0L350.1,117.7L349.3,117.4L346.1,119.8L344.5,119.7L346.4,118.4L343.7,117.7L340.8,117.9L335.4,117.8L334.9,116.9L336.7,116.0L335.5,115.2L337.8,113.5L340.7,109.1L342.4,107.5L344.8,106.6L346.1,106.7L345.6,107.5L344.1,109.2Z M131.4,99.9L134.0,99.7L133.2,102.8L135.6,105.1L134.5,105.0L132.8,103.8L131.8,102.5L130.4,101.6L129.9,100.4L130.1,99.5L131.4,99.9Z M899.0,109.0L901.8,114.0L897.7,113.0L896.0,117.1L898.7,119.9L898.6,121.8L896.5,120.2L894.7,122.3L894.2,120.0L894.5,117.3L894.2,114.3L894.8,112.2L894.9,108.5L893.3,105.7L893.6,101.9L896.1,100.7L895.0,99.4L896.3,99.0L897.0,100.8L897.9,103.5L897.9,106.2L899.0,109.0Z M481.1,104.8L476.2,106.5L472.3,106.1L474.5,103.2L473.1,100.3L476.9,98.2L479.0,96.9L481.3,96.7L484.3,98.5L482.8,100.4L483.2,102.4L481.1,104.8Z M535.2,95.5L533.6,97.8L530.7,96.2L530.3,95.1L534.4,94.1L535.2,95.5Z M75.0,91.3L72.2,92.4L70.8,91.7L70.4,90.4L72.9,89.4L74.4,89.0L76.2,89.2L77.4,90.0L75.0,91.3Z M491.7,87.1L488.7,90.1L491.5,89.8L494.6,89.8L493.8,92.0L491.3,94.5L494.2,94.7L496.9,98.3L498.8,98.7L500.5,101.9L501.3,103.0L504.7,103.5L504.3,105.3L502.9,106.1L504.0,107.5L501.5,109.0L497.8,109.0L493.1,109.7L491.8,109.2L490.0,110.5L487.4,110.2L485.4,111.2L484.0,110.7L488.0,107.7L490.5,107.2L486.2,106.7L485.4,105.6L488.3,104.7L486.8,103.2L487.3,101.4L491.4,101.7L491.8,100.0L489.9,98.3L486.5,97.8L485.9,97.1L486.9,95.8L486.0,95.0L484.5,96.4L484.3,93.7L482.9,92.3L483.9,89.4L486.1,87.1L488.3,87.4L491.7,87.1Z M40.1,83.6L38.4,84.0L36.5,83.5L34.9,82.7L37.6,82.3L39.8,82.5L40.1,83.6Z M279.8,77.3L278.7,78.8L277.5,78.6L276.8,77.7L276.9,77.5L278.0,76.7L279.1,76.8L279.8,77.3Z M272.5,75.8L269.3,77.3L267.3,77.3L266.7,76.5L268.8,75.2L272.6,75.3L272.5,75.8Z M23.0,72.8L24.7,73.4L26.4,73.1L28.7,73.8L31.4,74.2L31.2,74.5L29.1,75.1L27.0,74.5L25.9,74.0L23.5,74.1L22.8,73.9L23.0,72.8Z M263.4,67.6L264.0,68.8L265.4,68.4L267.0,69.1L270.0,70.1L273.2,71.0L273.5,72.3L275.5,72.1L277.5,73.0L275.0,73.9L270.7,73.2L269.1,71.9L266.4,73.4L262.4,74.9L261.5,73.2L257.7,73.5L260.1,72.1L260.5,69.9L261.4,67.4L263.4,67.6Z M459.7,65.4L459.1,67.2L462.2,69.1L458.6,71.2L450.6,73.1L448.2,73.6L444.5,73.2L436.8,72.3L439.5,71.1L433.5,69.7L438.4,69.2L438.3,68.4L432.4,67.7L434.3,65.9L438.5,65.5L442.8,67.4L447.1,65.9L450.6,66.7L455.1,65.2L459.7,65.4Z M289.3,63.5L286.1,63.6L285.5,62.3L286.6,60.7L289.2,60.3L291.4,61.1L291.4,62.3L291.1,62.7L289.3,63.5Z M234.3,58.0L232.6,59.0L228.8,58.2L226.6,58.5L222.8,57.2L225.2,56.4L227.2,55.2L230.1,55.9L231.8,56.4L232.6,57.0L234.3,58.0Z M0.0,51.3L0.4,51.2L2.7,51.2L6.7,52.0L6.5,52.4L3.6,53.1L0.0,53.2L0.0,51.3Z M248.5,57.0L248.5,59.8L252.2,57.6L255.5,59.4L254.7,61.5L257.4,63.3L260.3,61.3L262.3,58.9L262.4,55.9L266.4,56.1L270.5,56.5L274.2,57.9L274.4,59.3L272.3,60.7L274.3,62.2L273.9,63.6L268.5,65.5L264.6,66.0L261.8,65.1L260.9,66.5L258.2,68.9L257.4,70.1L254.2,71.9L250.2,72.1L248.0,73.3L247.9,75.1L244.6,75.5L241.2,77.7L238.2,80.8L237.1,83.0L237.0,86.3L241.1,86.7L242.3,89.3L243.6,91.4L247.5,90.9L252.7,92.1L255.4,93.1L257.4,94.4L260.9,95.2L263.9,96.4L268.4,96.5L271.5,96.8L271.0,99.2L271.9,102.0L273.9,105.1L278.0,107.8L280.2,106.9L281.7,104.0L280.2,99.6L278.3,98.1L282.7,96.8L285.8,94.9L287.4,93.0L287.2,91.1L285.3,88.7L281.9,86.7L285.2,83.7L284.0,81.2L283.0,76.9L285.0,76.2L289.7,77.0L292.6,77.3L294.9,76.5L297.5,77.5L300.9,79.1L301.7,80.2L306.7,80.4L306.6,82.7L307.5,86.2L310.1,86.7L312.1,88.3L316.1,86.8L318.8,83.7L320.6,82.4L322.8,84.9L326.4,88.4L329.5,91.8L328.3,93.5L332.0,95.1L334.5,96.7L339.0,97.4L340.7,98.3L341.8,100.6L344.0,101.0L345.1,102.0L345.3,105.1L343.3,106.2L341.3,107.2L336.7,108.2L333.2,110.4L328.5,110.9L322.6,110.3L318.4,110.3L315.6,110.5L313.2,112.5L309.7,113.7L305.7,117.4L302.5,119.9L304.8,119.5L309.3,115.8L315.1,113.5L319.3,113.2L321.7,114.6L319.1,116.5L320.0,119.5L320.9,121.6L324.5,122.9L329.1,122.5L331.9,119.4L332.1,121.4L333.9,122.4L330.4,124.3L324.3,125.9L321.5,127.0L318.4,129.0L316.3,128.8L316.2,126.5L321.0,124.2L316.6,124.3L313.5,124.6L314.0,125.5L311.0,126.9L308.2,127.8L305.2,128.7L303.6,130.5L303.3,130.9L303.3,132.4L304.2,133.9L305.3,133.9L305.0,132.9L305.9,133.5L305.7,134.3L303.8,134.8L302.4,134.7L300.4,135.2L299.2,135.4L297.6,135.5L295.3,136.3L299.3,135.8L300.2,136.3L296.3,137.1L294.5,137.1L294.6,136.8L293.7,137.6L294.6,137.7L294.0,139.7L291.9,141.8L291.7,141.1L291.1,141.0L290.2,140.3L290.8,141.8L291.4,142.3L291.5,143.3L290.6,144.4L289.1,146.6L288.8,146.5L289.7,144.6L288.2,143.6L287.9,141.3L287.4,142.5L288.0,144.2L286.2,143.8L288.1,144.7L288.2,147.3L289.0,147.5L289.3,148.5L289.6,151.2L287.9,153.3L285.0,154.1L283.2,155.8L281.8,155.9L280.4,157.0L280.0,157.9L276.9,159.7L275.4,161.0L274.1,162.7L273.6,164.6L274.1,166.6L275.1,168.9L276.3,170.9L276.3,172.1L277.6,175.3L277.5,177.2L277.4,178.3L276.7,180.0L275.9,180.3L274.5,180.0L274.1,178.8L273.0,178.1L271.6,175.8L270.3,173.6L269.8,172.5L270.4,170.7L269.6,169.2L267.5,166.8L266.4,166.4L263.6,167.7L263.1,167.5L261.7,166.2L260.0,165.6L256.9,165.9L254.4,165.6L252.3,165.8L251.1,166.2L251.6,167.0L251.6,168.1L252.2,168.6L251.6,169.0L250.6,168.6L249.6,169.1L247.6,169.0L245.5,167.6L243.1,167.9L241.0,167.3L239.3,167.5L237.0,168.1L234.4,170.2L231.7,171.4L230.2,172.7L229.5,173.9L229.5,175.9L229.6,177.2L230.2,178.1L230.2,178.1L230.2,178.1L229.1,180.6L228.6,182.6L228.4,186.3L228.1,187.7L228.6,189.2L229.5,190.5L230.0,192.7L231.9,194.7L232.5,196.3L233.6,197.7L236.6,198.4L237.7,199.6L240.1,198.8L242.3,198.5L244.3,198.0L246.1,197.6L247.9,196.4L248.5,194.8L248.7,192.5L249.2,191.7L251.1,190.9L254.0,190.3L256.5,190.4L258.2,190.2L258.9,190.7L258.8,192.1L257.3,193.7L256.6,195.4L257.1,195.9L256.7,197.1L256.0,199.3L255.3,198.6L254.7,198.6L254.7,199.0L255.3,199.0L255.2,199.8L254.8,201.0L255.0,201.4L254.7,202.4L254.9,202.7L254.6,204.1L254.0,204.8L253.5,204.9L253.0,205.9L253.9,206.4L254.1,206.0L254.9,206.3L255.2,206.4L255.8,205.9L256.6,205.9L256.9,206.1L257.3,206.0L258.6,206.2L259.9,206.2L260.8,205.9L261.1,205.5L262.0,205.7L262.7,205.9L263.4,205.8L263.9,205.6L265.2,206.0L265.6,206.0L266.5,206.5L267.3,207.2L268.3,207.6L269.0,208.3L268.8,208.6L268.7,209.2L268.9,210.2L268.3,211.2L268.0,212.3L267.9,213.5L268.1,214.3L268.1,215.5L267.7,215.8L267.4,217.0L267.6,217.7L267.1,218.4L267.2,219.2L267.6,219.6L268.3,221.1L269.4,222.2L270.7,223.4L271.7,224.4L271.6,225.0L272.8,225.1L273.0,224.9L273.8,225.6L275.1,225.4L276.3,224.7L278.0,224.1L279.0,223.3L280.5,223.5L280.4,223.7L281.9,223.8L283.2,224.3L284.1,225.1L285.1,225.9L286.6,226.0L288.7,224.1L289.8,223.8L289.8,222.9L290.3,220.5L291.9,219.2L293.7,219.2L293.9,218.6L296.1,218.8L298.3,217.4L299.3,216.8L300.7,215.5L301.7,215.6L302.4,216.4L301.9,217.3L301.8,217.9L300.1,218.3L301.1,219.5L301.0,221.0L299.8,222.6L300.8,224.8L302.0,224.6L302.7,222.6L301.8,221.6L301.7,219.5L305.1,218.4L304.7,217.1L305.7,216.2L306.7,218.2L308.7,218.2L310.5,219.8L310.6,220.7L313.1,220.7L316.0,220.4L317.6,221.7L319.8,222.0L321.3,221.1L321.3,220.4L324.8,220.3L328.1,220.2L325.8,221.1L326.7,222.4L328.9,222.6L331.0,223.9L331.5,226.2L332.9,226.1L334.0,226.8L335.8,227.8L337.5,229.6L337.6,231.0L338.7,231.1L340.2,232.4L341.3,233.4L344.6,234.0L344.9,233.5L347.1,233.3L350.1,234.0L351.1,234.3L353.1,235.0L356.0,237.3L356.5,238.5L357.5,238.3L358.1,239.9L359.7,244.7L361.2,245.2L361.3,247.1L359.2,249.4L360.0,250.2L364.9,250.7L365.0,253.4L367.2,251.6L370.6,252.6L375.3,254.3L376.6,255.9L376.2,257.5L379.4,256.6L384.8,258.1L388.9,258.0L393.1,260.3L396.6,263.4L398.7,264.2L401.1,264.3L402.1,265.2L403.1,268.7L403.5,270.4L402.4,275.0L401.0,276.8L397.1,280.7L395.3,283.8L393.3,286.2L392.6,286.3L391.8,288.3L392.0,293.5L391.2,297.8L390.9,299.6L390.0,300.7L389.6,304.4L386.7,308.1L386.3,310.9L384.0,312.1L383.4,313.8L380.3,313.8L376.0,314.9L374.0,316.1L370.9,316.9L367.6,319.1L365.3,321.9L364.9,324.0L365.3,325.5L364.8,328.3L364.2,329.7L362.3,331.2L359.2,336.1L356.7,338.3L354.8,339.6L353.6,342.2L351.7,343.8L350.5,345.5L347.4,347.1L345.4,346.5L343.8,346.8L341.3,345.6L339.4,345.7L337.7,344.2L337.5,345.6L341.0,348.0L340.7,349.9L342.4,351.1L342.3,352.5L339.6,356.1L335.5,357.6L329.9,358.1L326.8,357.9L327.4,359.5L326.9,361.6L327.4,363.0L325.7,364.0L322.9,364.4L320.2,363.3L319.1,364.1L319.5,366.8L321.4,367.7L322.9,366.8L323.7,368.2L321.2,369.1L318.9,370.8L318.5,373.6L317.9,375.1L315.3,375.1L313.1,376.5L312.3,378.6L315.0,380.6L317.7,381.2L316.7,383.7L313.4,385.3L311.6,388.5L309.1,389.6L308.0,390.9L308.8,393.8L310.7,395.4L309.5,395.3L307.1,395.3L305.7,395.9L303.2,396.9L302.8,399.5L301.6,399.6L298.5,398.7L295.3,396.8L291.8,395.2L290.9,393.4L291.7,391.8L290.3,389.9L290.0,385.2L291.2,382.5L294.1,380.4L289.9,379.6L292.5,377.1L293.5,372.5L296.6,373.5L298.0,367.7L296.1,367.0L295.3,370.5L293.5,370.1L294.4,366.1L295.3,361.0L296.6,359.1L295.8,356.3L295.6,353.2L296.8,353.1L298.5,348.6L300.4,344.2L301.6,340.1L300.9,335.9L301.8,333.6L301.4,330.2L303.0,326.8L303.5,321.4L304.4,315.6L305.3,309.4L305.1,304.9L304.5,301.0L301.7,299.4L301.5,298.2L296.0,295.4L291.0,292.4L288.9,290.7L287.7,288.4L288.2,287.6L285.8,284.0L283.1,278.8L280.5,273.3L279.3,272.0L278.4,270.0L276.3,268.2L274.3,267.0L275.2,265.8L273.9,263.2L274.7,261.2L276.9,259.5L278.4,257.4L277.8,256.2L276.8,257.5L275.1,256.2L275.7,255.5L275.2,252.9L276.2,252.5L276.7,250.8L277.7,249.0L277.5,247.9L279.1,247.3L281.0,246.2L280.6,245.3L281.6,245.1L281.5,243.7L282.1,242.7L283.5,242.5L284.7,240.8L285.8,239.3L284.7,238.6L285.3,237.0L284.6,234.5L285.2,233.8L284.8,231.4L283.7,229.9L282.7,229.1L282.1,227.6L282.8,226.9L282.1,226.7L281.6,225.8L280.2,225.0L279.0,225.2L278.4,226.2L277.3,226.9L276.7,226.9L276.4,227.5L277.8,229.0L277.0,229.4L276.6,229.8L275.3,229.9L274.8,228.3L274.5,228.8L273.6,228.6L273.0,227.5L271.9,227.3L271.1,227.0L269.9,227.0L269.9,227.6L269.5,227.2L268.0,226.5L267.5,226.0L267.8,225.5L267.7,224.9L266.9,224.2L265.8,223.6L264.9,223.3L264.7,222.5L264.0,222.0L264.1,222.8L263.6,223.5L262.9,222.7L262.1,222.4L261.7,221.8L261.7,221.0L262.1,220.1L261.3,219.7L261.9,219.2L261.0,218.3L259.7,217.2L259.0,216.3L257.9,215.4L256.5,214.1L256.8,213.7L257.2,214.1L257.5,213.9L257.0,213.1L256.1,212.8L255.8,213.5L254.2,213.4L253.2,213.2L252.1,212.6L250.5,212.4L249.7,211.8L248.3,211.4L246.6,211.3L245.3,210.8L243.8,209.6L240.7,206.6L239.2,205.7L237.0,205.0L235.4,205.2L233.2,206.2L231.8,206.5L229.8,205.8L227.7,205.3L225.1,204.0L223.1,203.6L219.9,202.3L217.6,201.0L216.9,200.2L215.3,200.1L212.5,199.2L211.3,197.9L208.4,196.3L207.0,194.6L206.3,193.2L207.2,193.0L206.9,192.2L207.6,191.5L207.6,190.5L206.7,189.2L206.4,188.1L205.5,186.7L203.0,184.0L200.2,181.8L198.9,180.1L196.5,178.9L196.0,178.3L196.4,176.5L195.0,175.9L193.4,174.5L192.7,172.6L191.2,172.4L189.6,170.9L188.3,169.6L188.1,168.7L186.6,166.6L185.7,164.5L185.7,163.4L183.7,162.3L182.8,162.4L181.2,161.7L180.7,162.8L181.2,164.1L181.5,166.2L182.4,167.4L184.5,169.3L184.9,169.9L185.4,170.1L185.7,171.1L186.2,171.0L186.8,172.8L187.6,173.5L188.2,174.5L190.0,175.9L190.9,178.5L191.7,179.7L192.5,181.0L192.6,182.5L194.0,182.6L195.1,183.9L196.1,185.1L196.0,185.6L194.9,186.6L194.4,186.6L193.6,184.9L191.8,183.3L189.8,182.0L188.4,181.3L188.5,179.2L188.1,177.7L186.7,176.9L184.8,175.6L184.5,176.0L183.8,175.3L182.0,174.6L180.4,173.0L180.6,172.8L181.8,172.9L182.8,171.9L182.9,170.7L180.7,168.7L179.1,167.9L178.1,166.2L177.1,164.3L175.8,162.1L174.6,159.6L174.2,158.2L172.4,156.6L171.1,156.3L170.8,155.5L169.2,155.3L168.2,154.6L165.6,154.3L164.9,153.9L164.6,152.3L161.9,149.5L159.6,145.7L159.7,145.0L158.5,144.1L156.3,141.8L155.9,139.5L154.5,138.0L155.1,135.7L155.0,133.3L154.1,131.2L155.2,128.6L155.8,123.5L155.3,119.8L154.5,117.4L153.7,116.2L154.0,115.6L158.0,116.6L159.5,119.2L160.2,118.4L159.7,116.2L158.8,113.9L158.4,113.9L153.0,111.2L151.0,110.0L146.0,108.8L144.5,106.3L144.9,104.6L141.3,103.5L140.8,101.2L137.5,99.2L137.4,97.8L135.9,96.7L133.4,95.8L132.6,93.4L129.1,91.2L127.6,88.5L124.9,88.4L120.5,88.3L117.2,87.5L111.5,84.6L108.8,84.1L104.0,83.1L100.1,83.3L94.7,82.1L91.4,80.9L88.3,81.5L88.8,83.4L87.3,83.6L84.1,84.2L81.6,85.1L78.6,85.7L78.2,84.0L79.4,81.3L82.4,80.5L81.6,79.8L78.1,81.3L76.2,83.2L72.2,85.1L74.2,86.5L71.6,88.5L68.6,89.6L65.8,90.5L65.1,91.7L60.8,93.2L59.9,94.5L56.7,95.6L54.8,95.4L52.2,96.2L49.3,97.2L47.0,98.1L42.3,98.9L41.8,98.4L44.9,97.1L47.6,96.3L50.5,94.7L54.0,94.4L55.4,93.3L59.2,91.6L59.8,91.1L61.9,90.1L62.4,88.0L63.8,86.3L60.6,87.2L59.7,86.7L58.2,87.7L56.4,86.3L55.6,87.3L54.6,85.9L51.8,87.0L50.1,87.0L49.9,85.4L50.4,84.3L48.6,83.4L45.0,83.9L42.6,82.6L40.7,81.9L40.7,80.4L38.6,79.2L39.6,77.6L41.9,76.0L42.9,74.6L45.1,74.4L47.0,74.8L49.3,73.5L51.3,73.7L53.4,72.9L52.9,71.6L51.3,71.1L53.4,70.0L51.7,70.1L48.7,70.7L47.9,71.3L45.7,70.7L41.8,71.0L37.7,70.3L36.5,69.2L33.0,67.6L36.9,66.4L43.1,65.1L45.4,65.1L45.0,66.4L50.9,66.3L48.6,64.6L45.2,63.6L43.3,62.2L40.6,61.0L36.8,60.1L38.3,58.7L43.3,58.6L46.8,57.3L47.4,56.0L50.3,54.6L53.0,54.3L58.2,53.1L60.8,53.3L65.1,51.8L69.3,52.4L71.3,53.6L72.5,53.1L77.2,53.2L77.0,53.9L81.3,54.4L84.1,54.1L90.0,55.0L95.3,55.2L97.4,55.6L101.1,55.1L105.4,56.0L108.4,56.4L113.6,57.0L117.9,58.4L120.8,58.6L123.3,57.5L126.6,56.6L130.8,56.9L134.9,55.7L139.5,55.0L141.4,56.2L143.4,55.5L144.1,54.2L146.0,54.5L150.7,57.0L154.4,55.1L154.8,57.2L158.2,56.8L159.2,56.0L162.6,56.1L166.8,57.3L173.3,58.3L177.2,58.8L179.9,58.6L183.6,60.0L179.7,61.4L184.7,62.0L192.2,61.6L194.6,61.2L197.6,62.8L200.6,61.4L197.7,60.2L199.5,59.3L202.9,59.2L205.1,58.9L207.4,59.6L210.2,61.1L213.3,60.8L218.2,62.1L222.5,61.6L226.5,61.7L226.2,60.0L228.7,59.5L233.0,60.4L233.0,63.1L234.8,60.9L237.0,60.9L238.2,58.1L235.3,56.4L232.0,55.3L232.2,52.2L235.5,50.2L239.2,50.7L242.0,51.9L245.8,55.0L243.3,56.4L248.5,57.0Z M182.9,46.9L181.5,48.2L187.7,47.3L191.5,48.7L194.7,47.3L197.2,48.2L199.5,51.0L200.9,49.8L198.9,47.0L201.3,46.6L204.1,47.0L207.2,48.1L209.0,50.8L209.8,52.8L214.5,54.2L219.5,55.5L219.2,56.7L214.6,56.9L216.4,58.0L215.5,59.0L210.4,58.6L205.7,57.8L202.4,58.0L197.2,58.9L189.0,59.4L185.2,59.6L183.7,58.3L179.9,57.6L177.5,57.9L174.1,55.7L175.9,55.4L180.2,54.9L184.1,55.0L187.7,54.5L182.4,53.9L176.4,54.1L172.5,54.1L171.0,53.0L177.5,51.9L173.2,52.0L168.3,51.2L170.7,49.1L172.6,48.0L180.0,46.4L182.9,46.9Z M209.7,46.1L207.3,47.9L202.9,45.9L203.9,45.6L207.6,45.4L209.7,46.1Z M287.9,46.9L288.2,47.7L285.2,47.6L282.2,47.6L279.2,47.9L278.4,47.8L275.3,46.3L275.5,45.3L276.8,45.1L283.2,45.4L287.9,46.9Z M259.6,46.8L261.7,48.5L264.3,46.3L271.3,45.1L276.1,48.0L275.7,49.8L281.2,49.0L283.8,47.9L290.0,49.3L293.8,50.6L294.2,51.9L299.3,51.2L302.2,53.0L308.9,54.1L311.3,55.2L314.0,57.8L308.9,59.1L315.4,60.9L319.8,61.5L323.8,64.1L328.2,64.3L327.3,66.2L322.5,69.4L319.0,68.3L314.7,65.6L311.1,65.9L310.7,67.5L313.6,69.1L317.4,70.4L318.6,71.2L320.4,73.9L319.4,75.9L315.9,75.2L308.9,72.9L312.9,75.3L315.8,77.0L316.2,78.0L308.7,76.9L302.7,75.2L299.3,73.9L300.3,73.1L296.2,71.7L292.1,70.3L292.2,71.1L284.1,71.6L281.8,70.6L283.6,68.6L288.8,68.5L294.6,68.2L293.6,67.2L294.6,65.8L298.2,63.1L297.4,61.9L296.4,60.9L292.1,59.6L286.5,58.6L288.3,57.9L285.3,56.2L282.9,56.0L280.7,55.1L279.2,55.9L274.2,56.3L264.0,55.7L258.2,54.8L253.7,54.4L251.4,53.4L254.3,52.2L250.3,52.2L249.4,49.3L251.6,46.9L254.4,45.7L261.6,45.0L259.6,46.8Z M221.2,44.9L224.5,45.5L229.5,45.1L230.2,45.9L227.6,47.2L231.8,48.4L231.3,50.9L226.8,52.0L224.1,51.8L222.2,50.7L215.3,48.6L215.3,47.7L221.0,48.0L217.9,46.2L221.2,44.9Z M898.9,46.6L894.7,46.7L889.0,46.3L888.5,46.2L891.1,45.1L894.6,44.8L898.6,45.9L898.9,46.6Z M241.1,47.9L238.1,49.9L235.0,49.8L233.2,47.4L233.3,46.0L234.7,44.8L237.5,44.1L243.3,44.2L248.6,44.8L244.4,47.3L241.1,47.9Z M165.4,51.7L158.1,53.1L156.6,51.8L150.2,50.4L151.1,49.5L153.3,47.2L155.7,45.3L153.0,43.6L162.4,43.2L166.4,43.8L173.5,43.9L176.2,44.7L179.1,45.9L175.6,46.6L168.8,48.6L165.4,50.5L165.4,51.7Z M918.7,41.4L915.5,42.5L911.0,42.3L905.9,41.2L906.5,40.3L911.7,40.7L918.7,41.4Z M240.0,41.7L238.5,42.8L234.4,42.6L231.1,41.9L232.5,40.6L236.5,39.9L239.0,40.8L240.0,41.7Z M903.0,40.1L900.8,42.2L890.6,42.1L886.0,42.7L880.5,40.9L882.0,39.0L885.6,38.5L893.0,38.6L903.0,40.1Z M226.4,36.9L228.5,38.2L228.6,39.6L227.3,41.7L222.8,42.0L219.8,41.5L219.8,39.9L215.3,40.1L215.1,38.0L218.1,38.0L222.3,37.1L226.2,37.3L226.4,36.9Z M199.4,38.3L200.5,39.3L203.0,38.9L205.9,39.0L206.4,40.3L204.7,41.7L195.3,42.1L188.3,43.3L184.0,43.4L183.7,42.4L189.5,41.2L176.9,41.5L173.0,41.0L176.8,38.3L179.4,37.6L187.3,38.5L192.2,40.1L197.0,40.4L193.1,37.7L195.6,36.7L198.5,37.0L199.4,38.3Z M659.8,53.6L658.2,53.8L649.1,53.4L648.4,52.2L643.3,51.5L642.9,50.0L645.8,49.4L645.7,47.8L651.2,45.5L648.6,45.1L655.3,42.7L654.5,41.4L660.7,40.0L669.9,38.2L679.2,37.7L683.9,36.6L689.3,36.3L691.3,37.4L689.4,38.2L679.5,39.6L671.1,40.9L662.4,43.6L658.3,46.3L653.9,49.0L654.5,51.3L659.8,53.6Z M237.0,35.8L240.1,36.7L245.5,36.7L247.9,37.6L247.3,38.7L250.5,39.3L252.3,40.0L256.0,40.1L260.1,40.3L264.5,39.7L270.1,39.5L274.6,39.7L277.6,40.7L278.2,41.9L276.5,42.6L272.4,43.2L268.8,42.9L260.8,43.3L255.1,43.4L250.7,43.0L243.3,42.1L242.3,40.6L242.0,39.2L239.2,38.0L233.4,37.7L230.2,36.8L231.3,35.7L237.0,35.8Z M177.2,34.3L176.8,36.5L174.7,37.4L172.1,37.6L166.9,38.7L162.5,39.2L158.7,38.6L163.5,36.5L169.2,34.7L173.4,34.7L177.2,34.3Z M239.3,34.7L238.1,34.7L232.9,34.6L232.1,33.8L237.7,33.8L239.7,34.3L239.3,34.7Z M193.9,34.2L188.7,35.0L184.6,34.1L186.9,33.2L190.9,32.9L194.9,33.3L193.9,34.2Z M568.7,33.7L562.5,34.9L557.6,34.2L559.5,33.5L557.8,32.6L563.6,32.1L564.7,33.1L568.7,33.7Z M195.4,31.7L192.0,32.2L187.4,32.2L187.4,31.8L190.3,31.0L191.8,31.1L195.4,31.7Z M233.8,33.2L229.7,33.8L227.4,33.1L226.2,32.1L226.0,30.9L229.6,31.0L231.2,31.2L234.6,32.2L233.8,33.2Z M222.1,32.4L223.1,33.6L218.6,33.3L214.0,32.4L207.8,32.3L210.5,31.5L207.2,30.8L207.0,29.7L212.4,30.1L219.9,31.1L222.1,32.4Z M791.9,32.5L776.2,33.6L781.3,29.9L783.6,29.6L785.7,29.8L792.7,31.4L791.9,32.5Z M550.7,28.6L559.8,30.7L552.9,31.8L551.3,33.8L548.9,34.3L547.6,36.6L544.2,36.8L538.2,35.1L540.7,34.1L536.6,33.3L531.2,30.9L529.0,28.7L536.6,27.7L538.1,28.7L542.1,28.7L543.1,27.7L547.2,27.6L550.7,28.6Z M570.7,26.6L576.1,27.6L572.0,29.1L564.0,29.4L555.8,29.0L555.3,28.2L551.3,28.2L548.2,26.9L556.8,26.1L560.9,26.8L563.7,26.0L570.7,26.6Z M642.0,26.3L638.3,26.6L635.8,26.8L635.4,27.3L632.2,27.8L629.2,27.1L630.8,26.2L624.6,26.1L630.0,25.6L634.2,25.6L634.8,26.4L636.4,25.7L639.0,25.2L643.1,25.8L642.0,26.3Z M777.6,30.9L771.5,31.2L763.8,30.4L759.2,29.4L757.1,27.4L753.3,26.8L760.5,24.9L766.5,24.3L771.9,25.7L778.3,28.4L777.6,30.9Z M258.3,28.7L261.6,29.6L257.8,30.4L252.7,32.5L247.8,32.7L242.0,32.4L239.0,31.2L239.1,30.2L241.3,29.5L236.2,29.5L233.1,28.6L231.4,27.3L233.3,26.1L235.2,25.3L238.1,25.1L236.8,24.4L243.3,24.3L246.9,25.8L251.5,26.4L256.1,26.9L258.3,28.7Z M309.7,19.1L317.1,19.4L323.1,19.7L328.2,20.5L328.1,21.2L321.3,22.4L314.6,23.0L312.1,23.6L318.1,23.6L311.6,25.3L307.0,26.1L302.3,28.3L296.5,28.8L294.8,29.4L286.4,29.7L290.2,30.0L288.3,30.5L290.6,31.9L287.9,32.8L283.6,33.6L282.3,34.7L278.4,35.5L278.8,36.2L283.6,36.0L283.6,36.7L276.2,38.4L269.0,37.6L260.8,38.1L256.7,37.7L251.4,37.6L251.1,36.2L256.2,35.6L254.8,33.6L256.5,33.4L264.0,34.6L260.2,32.8L255.7,32.3L257.9,31.2L262.8,30.6L263.6,29.6L259.7,28.5L258.5,27.1L266.1,27.2L268.3,27.5L272.6,26.5L266.4,26.2L256.7,26.3L251.8,25.4L249.4,24.3L246.2,23.5L245.6,22.5L249.7,22.0L253.0,21.9L258.4,21.4L262.5,20.4L265.9,20.6L268.9,21.3L271.1,19.8L274.7,19.4L279.7,19.1L288.2,19.0L289.7,19.3L297.7,18.8L303.7,19.0L309.7,19.1Z M424.7,18.0L442.1,20.2L437.0,21.3L426.3,21.4L411.4,21.7L412.8,22.2L422.6,21.9L431.0,22.8L436.4,22.0L438.7,23.0L435.6,24.6L442.7,23.5L456.2,22.5L464.5,23.0L466.1,24.2L454.8,26.2L453.2,26.8L444.3,27.3L450.7,27.4L447.5,29.4L445.3,31.2L445.4,34.3L448.7,36.2L444.3,36.3L439.8,37.1L444.9,38.6L445.6,41.0L442.6,41.2L446.2,43.6L440.0,43.8L443.2,45.0L442.3,45.9L438.4,46.4L434.5,46.4L438.0,48.3L438.1,49.5L432.6,48.3L431.1,49.1L434.9,49.8L438.5,51.5L439.6,53.7L434.6,54.2L432.5,53.2L429.0,51.6L430.0,53.5L426.8,54.9L434.1,55.0L437.9,55.2L430.5,57.6L422.9,59.8L414.8,60.8L411.7,60.8L408.9,61.8L405.0,64.8L399.0,66.7L397.1,66.8L393.4,67.5L389.4,68.2L387.0,69.9L387.0,71.8L385.6,73.7L381.1,75.9L382.2,78.1L380.9,80.3L379.5,83.1L375.6,83.2L371.5,81.0L365.9,80.9L363.2,79.4L361.4,76.7L356.6,73.3L355.2,71.4L354.8,69.0L350.9,66.4L351.9,64.3L350.1,63.4L352.8,60.1L357.0,59.1L358.1,57.9L358.7,55.8L355.5,56.7L354.0,57.2L351.5,57.5L348.1,56.6L347.9,54.8L349.0,53.3L351.6,53.2L357.3,54.0L352.5,52.2L350.0,51.3L347.2,51.6L344.9,51.0L348.0,48.4L346.3,47.3L344.1,45.4L340.8,42.5L337.2,41.4L337.3,40.2L329.8,38.6L323.9,38.4L316.5,38.5L309.7,38.7L306.5,37.8L301.7,36.1L309.0,35.2L314.5,35.1L302.7,34.3L296.4,33.2L296.8,32.1L307.3,30.8L317.5,29.5L318.5,28.5L311.0,27.5L313.5,26.3L323.1,24.4L327.1,24.1L326.0,22.9L332.6,22.1L341.1,21.7L349.6,21.7L352.7,22.5L360.0,21.0L366.7,22.0L370.6,22.3L376.3,23.2L369.7,21.7L370.1,20.5L379.4,18.8L389.2,18.9L392.7,17.9L402.5,17.7L424.7,18.0Z" fill="#1c1c1c" stroke="none"/>
+  </g>
+  <text x="226.7" y="177.8" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">US</text><text x="204.7" y="127.8" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">CA</text><text x="871.7" y="348.9" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">AU</text><text x="274.4" y="219.9" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">KY</text><text x="855.0" y="172.1" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">KR</text><text x="836.1" y="207.7" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">TW</text><text x="789.4" y="173.8" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">CN</text><text x="355.8" y="312.9" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">BR</text><text x="301.4" y="372.7" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">CL</text><text x="788.3" y="269.8" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">SG</text><text x="884.2" y="172.9" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">JP</text><text x="413.0" y="74.3" text-anchor="end" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">GB · 9</text><text x="413.0" y="89.3" text-anchor="end" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">IE · 3</text><text x="413.0" y="104.3" text-anchor="end" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">NL · 2</text><text x="413.0" y="119.3" text-anchor="end" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">CH · 3</text><text x="413.0" y="134.3" text-anchor="end" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">FR · 8</text><text x="645.0" y="74.3" text-anchor="start" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">FI · 1</text><text x="645.0" y="89.3" text-anchor="start" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">SE · 2</text><text x="645.0" y="104.3" text-anchor="start" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">DK · 2</text><text x="645.0" y="119.3" text-anchor="start" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">LT · 1</text><text x="645.0" y="134.3" text-anchor="start" font-family="Fira Mono,monospace" font-size="10.5" fill="#cfcfcf" stroke="#0a0a0a" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round">DE · 3</text>
+  <g><title>United States: 9 accounts</title><circle cx="226.7" cy="140.3" r="26.5" fill="#3b9eff" fill-opacity="0.82" stroke="#6cb6ff" stroke-width="1.4"/><text x="226.7" y="143.9" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">9</text></g><g><title>United Kingdom: 9 accounts</title><circle cx="493.1" cy="100.0" r="26.5" fill="#3b9eff" fill-opacity="0.82" stroke="#6cb6ff" stroke-width="1.4"/><text x="493.1" y="103.6" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">9</text></g><g><title>France: 8 accounts</title><circle cx="506.9" cy="120.6" r="25.3" fill="#3b9eff" fill-opacity="0.76" stroke="#6cb6ff" stroke-width="1.4"/><text x="506.9" y="124.2" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">8</text></g><g><title>Canada: 6 accounts</title><circle cx="204.7" cy="94.2" r="22.6" fill="#3b9eff" fill-opacity="0.65" stroke="#6cb6ff" stroke-width="1.4"/><text x="204.7" y="97.8" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">6</text></g><g><title>Germany: 3 accounts</title><circle cx="528.9" cy="107.8" r="17.6" fill="#3b9eff" fill-opacity="0.49" stroke="#6cb6ff" stroke-width="1.4"/><text x="528.9" y="111.4" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">3</text></g><g><title>Switzerland: 3 accounts</title><circle cx="522.8" cy="120.0" r="17.6" fill="#3b9eff" fill-opacity="0.49" stroke="#6cb6ff" stroke-width="1.4"/><text x="522.8" y="123.6" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">3</text></g><g><title>Ireland: 3 accounts</title><circle cx="478.6" cy="102.2" r="17.6" fill="#3b9eff" fill-opacity="0.49" stroke="#6cb6ff" stroke-width="1.4"/><text x="478.6" y="105.8" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">3</text></g><g><title>Australia: 3 accounts</title><circle cx="871.7" cy="320.3" r="17.6" fill="#3b9eff" fill-opacity="0.49" stroke="#6cb6ff" stroke-width="1.4"/><text x="871.7" y="323.9" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">3</text></g><g><title>Netherlands: 2 accounts</title><circle cx="514.7" cy="105.0" r="15.4" fill="#3b9eff" fill-opacity="0.43" stroke="#6cb6ff" stroke-width="1.4"/><text x="514.7" y="108.6" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">2</text></g><g><title>Sweden: 2 accounts</title><circle cx="551.7" cy="83.1" r="15.4" fill="#3b9eff" fill-opacity="0.43" stroke="#6cb6ff" stroke-width="1.4"/><text x="551.7" y="86.7" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">2</text></g><g><title>Denmark: 2 accounts</title><circle cx="526.4" cy="94.4" r="15.4" fill="#3b9eff" fill-opacity="0.43" stroke="#6cb6ff" stroke-width="1.4"/><text x="526.4" y="98.0" text-anchor="middle" font-family="Fira Mono,monospace" font-size="11" font-weight="700" fill="#03203a">2</text></g><g><title>Cayman Islands: 1 account</title><circle cx="274.4" cy="196.4" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g><g><title>South Korea: 1 account</title><circle cx="855.0" cy="148.6" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g><g><title>Finland: 1 account</title><circle cx="571.4" cy="78.1" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g><g><title>Taiwan: 1 account</title><circle cx="836.1" cy="184.2" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g><g><title>China: 1 account</title><circle cx="789.4" cy="150.3" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g><g><title>Brazil: 1 account</title><circle cx="355.8" cy="289.4" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g><g><title>Chile: 1 account</title><circle cx="301.4" cy="349.2" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g><g><title>Singapore: 1 account</title><circle cx="788.3" cy="246.3" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g><g><title>Lithuania: 1 account</title><circle cx="566.4" cy="96.7" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g><g><title>Japan: 1 account</title><circle cx="884.2" cy="149.4" r="12.5" fill="#3b9eff" fill-opacity="0.38" stroke="#6cb6ff" stroke-width="1.4"/></g>
+  <text x="34" y="434" font-family="Fira Mono,monospace" font-size="11" fill="#8f8f8f" letter-spacing="0.5">ACCOUNTS PER COUNTRY</text><circle cx="46.0" cy="456" r="12.5" fill="#3b9eff" fill-opacity="0.5" stroke="#6cb6ff" stroke-width="1.2"/><text x="46.0" y="478" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10" fill="#8f8f8f">1</text><circle cx="92.1" cy="456" r="17.6" fill="#3b9eff" fill-opacity="0.5" stroke="#6cb6ff" stroke-width="1.2"/><text x="92.1" y="478" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10" fill="#8f8f8f">3</text><circle cx="148.4" cy="456" r="22.6" fill="#3b9eff" fill-opacity="0.5" stroke="#6cb6ff" stroke-width="1.2"/><text x="148.4" y="478" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10" fill="#8f8f8f">6</text><circle cx="213.5" cy="456" r="26.5" fill="#3b9eff" fill-opacity="0.5" stroke="#6cb6ff" stroke-width="1.2"/><text x="213.5" y="478" text-anchor="middle" font-family="Fira Mono,monospace" font-size="10" fill="#8f8f8f">9</text>
+</svg>
+      </div>
+      <div class="geo-caption">Plotted on real country geography; bubble size and brightness scale with the number of sampled accounts in each country. The 60 accounts cluster in Western &amp; Northern Europe (34) and North America (15), with the remaining 11 across APAC (5), Oceania (3), LATAM (2) and the Caribbean (1). Hover any bubble for the country and count.</div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="sample-table">
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Company &amp; market index flags</th>
+            <th>Geo</th>
+            <th>Revenue</th>
+            <th>Emp.</th>
+            <th>IT Spend</th>
+            <th>Dev Spend</th>
+            <th>Affinity signals (installed)</th>
+            <th class="num">F</th>
+            <th class="num">N</th>
+            <th class="num">I</th>
+            <th class="num">Dev Spend %</th>
+            <th class="num">GenAI</th>
+            <th class="num">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+            <tr>
+              <td class="r-num">1</td>
+              <td class="r-name">Netflix, Inc.  <span class="flag flag-f500" title="Fortune 500 rank #116">F500 #116</span> <span class="flag flag-g2000" title="Forbes Global 2000 rank #189">G2000 #189</span></td>
+              <td class="r-cc">US</td>
+              <td class="r-rev">$45.2B</td>
+              <td class="r-emp">16K</td>
+              <td class="r-rev r-itspend">$2.2B</td>
+              <td class="r-rev r-devspend">$319M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">92</td>
+              <td class="r-fni">89</td>
+              <td class="r-fni">86</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>90</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">2</td>
+              <td class="r-name">Orange SA  <span class="flag flag-g2000" title="Forbes Global 2000 rank #263">G2000 #263</span></td>
+              <td class="r-cc">FR</td>
+              <td class="r-rev">$45.4B</td>
+              <td class="r-emp">124K</td>
+              <td class="r-rev r-itspend">$1.8B</td>
+              <td class="r-rev r-devspend">$226M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">92</td>
+              <td class="r-fni">97</td>
+              <td class="r-fni">68</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>90</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">3</td>
+              <td class="r-name">Shopify Inc  <span class="flag flag-g2000" title="Forbes Global 2000 rank #803">G2000 #803</span></td>
+              <td class="r-cc">CA</td>
+              <td class="r-rev">$11.6B</td>
+              <td class="r-emp">8K</td>
+              <td class="r-rev r-itspend">$1.4B</td>
+              <td class="r-rev r-devspend">$249M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">95</td>
+              <td class="r-fni">95</td>
+              <td class="r-fni">55</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>89</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">4</td>
+              <td class="r-name">Deutsche Bank AG  <span class="flag flag-g2000" title="Forbes Global 2000 rank #133">G2000 #133</span></td>
+              <td class="r-cc">DE</td>
+              <td class="r-rev">$36.1B</td>
+              <td class="r-emp">90K</td>
+              <td class="r-rev r-itspend">$3.9B</td>
+              <td class="r-rev r-devspend">$725M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">94</td>
+              <td class="r-fni">81</td>
+              <td class="r-fni">87</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>89</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">5</td>
+              <td class="r-name">Herbalife Nutrition Ltd.</td>
+              <td class="r-cc">KY</td>
+              <td class="r-rev">$5.0B</td>
+              <td class="r-emp">8K</td>
+              <td class="r-rev r-itspend">$42M</td>
+              <td class="r-rev r-devspend">$7M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">87</td>
+              <td class="r-fni">97</td>
+              <td class="r-fni">76</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>88</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">6</td>
+              <td class="r-name">Adyen N.V.  <span class="flag flag-g2000" title="Forbes Global 2000 rank #1163">G2000 #1163</span></td>
+              <td class="r-cc">NL</td>
+              <td class="r-rev">$2.7B</td>
+              <td class="r-emp">5K</td>
+              <td class="r-rev r-itspend">$215M</td>
+              <td class="r-rev r-devspend">$41M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">95</td>
+              <td class="r-fni">95</td>
+              <td class="r-fni">47</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">13</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>88</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">7</td>
+              <td class="r-name">BNP PARIBAS  <span class="flag flag-g2000" title="Forbes Global 2000 rank #35">G2000 #35</span></td>
+              <td class="r-cc">FR</td>
+              <td class="r-rev">$57.6B</td>
+              <td class="r-emp">180K</td>
+              <td class="r-rev r-itspend">$4.6B</td>
+              <td class="r-rev r-devspend">$852M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">94</td>
+              <td class="r-fni">75</td>
+              <td class="r-fni">76</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>86</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">8</td>
+              <td class="r-name">Abbott Laboratories  <span class="flag flag-f500" title="Fortune 500 rank #107">F500 #107</span> <span class="flag flag-g2000" title="Forbes Global 2000 rank #144">G2000 #144</span></td>
+              <td class="r-cc">US</td>
+              <td class="r-rev">$44.3B</td>
+              <td class="r-emp">115K</td>
+              <td class="r-rev r-itspend">$1.1B</td>
+              <td class="r-rev r-devspend">$167M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">100</td>
+              <td class="r-fni">87</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>85</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">9</td>
+              <td class="r-name">Johnson &amp; Johnson  <span class="flag flag-f500" title="Fortune 500 rank #48">F500 #48</span> <span class="flag flag-g2000" title="Forbes Global 2000 rank #42">G2000 #42</span></td>
+              <td class="r-cc">US</td>
+              <td class="r-rev">$94.2B</td>
+              <td class="r-emp">138K</td>
+              <td class="r-rev r-itspend">$3.0B</td>
+              <td class="r-rev r-devspend">$457M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">100</td>
+              <td class="r-fni">85</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>85</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">10</td>
+              <td class="r-name">Bamboo Hr LLC</td>
+              <td class="r-cc">US</td>
+              <td class="r-rev">$274M</td>
+              <td class="r-emp">2K</td>
+              <td class="r-rev r-itspend">$28M</td>
+              <td class="r-rev r-devspend">$5M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">76</td>
+              <td class="r-fni">97</td>
+              <td class="r-fni">51</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>85</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">11</td>
+              <td class="r-name">LG Electronics Inc.  <span class="flag flag-g2000" title="Forbes Global 2000 rank #910">G2000 #910</span></td>
+              <td class="r-cc">KR</td>
+              <td class="r-rev">$62.9B</td>
+              <td class="r-emp">74K</td>
+              <td class="r-rev r-itspend">$4.5B</td>
+              <td class="r-rev r-devspend">$847M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">85</td>
+              <td class="r-fni">91</td>
+              <td class="r-fni">71</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>85</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">12</td>
+              <td class="r-name">AXA SA  <span class="flag flag-g2000" title="Forbes Global 2000 rank #44">G2000 #44</span></td>
+              <td class="r-cc">FR</td>
+              <td class="r-rev">$117.6B</td>
+              <td class="r-emp">111K</td>
+              <td class="r-rev r-itspend">$6.8B</td>
+              <td class="r-rev r-devspend">$1.2B</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">86</td>
+              <td class="r-fni">82</td>
+              <td class="r-fni">80</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>84</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">13</td>
+              <td class="r-name">Spotify Technology S.A.  <span class="flag flag-g2000" title="Forbes Global 2000 rank #725">G2000 #725</span></td>
+              <td class="r-cc">SE</td>
+              <td class="r-rev">$19.3B</td>
+              <td class="r-emp">7K</td>
+              <td class="r-rev r-itspend">$840M</td>
+              <td class="r-rev r-devspend">$123M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">90</td>
+              <td class="r-fni">79</td>
+              <td class="r-fni">75</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>84</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">14</td>
+              <td class="r-name">Nestle S.A.  <span class="flag flag-g2000" title="Forbes Global 2000 rank #48">G2000 #48</span></td>
+              <td class="r-cc">CH</td>
+              <td class="r-rev">$107.3B</td>
+              <td class="r-emp">271K</td>
+              <td class="r-rev r-itspend">$1.8B</td>
+              <td class="r-rev r-devspend">$289M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">Storyblok</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">91</td>
+              <td class="r-fni">79</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>82</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">15</td>
+              <td class="r-name">10Pearls LLC</td>
+              <td class="r-cc">US</td>
+              <td class="r-rev">$358M</td>
+              <td class="r-emp">2K</td>
+              <td class="r-rev r-itspend"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-rev r-devspend"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">76</td>
+              <td class="r-fni">97</td>
+              <td class="r-fni">24</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>82</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">16</td>
+              <td class="r-name">H &amp; M Hennes &amp; Mauritz AB  <span class="flag flag-g2000" title="Forbes Global 2000 rank #822">G2000 #822</span></td>
+              <td class="r-cc">SE</td>
+              <td class="r-rev">$23.1B</td>
+              <td class="r-emp">95K</td>
+              <td class="r-rev r-itspend">$241M</td>
+              <td class="r-rev r-devspend">$41M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Contentful</span><span class="sig">Storyblok</span></td>
+              <td class="r-fni">89</td>
+              <td class="r-fni">76</td>
+              <td class="r-fni">55</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text)">8</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>80</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">17</td>
+              <td class="r-name">BT GROUP PLC  <span class="flag flag-g2000" title="Forbes Global 2000 rank #552">G2000 #552</span></td>
+              <td class="r-cc">GB</td>
+              <td class="r-rev">$25.9B</td>
+              <td class="r-emp">85K</td>
+              <td class="r-rev r-itspend">$1.0B</td>
+              <td class="r-rev r-devspend">$127M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">92</td>
+              <td class="r-fni">66</td>
+              <td class="r-fni">64</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>80</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">18</td>
+              <td class="r-name">TietoEVRY Oyj</td>
+              <td class="r-cc">FI</td>
+              <td class="r-rev">$2.1B</td>
+              <td class="r-emp">14K</td>
+              <td class="r-rev r-itspend">$218M</td>
+              <td class="r-rev r-devspend">$33M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">92</td>
+              <td class="r-fni">73</td>
+              <td class="r-fni">53</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>80</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">19</td>
+              <td class="r-name">Nike, Inc.  <span class="flag flag-f500" title="Fortune 500 rank #90">F500 #90</span> <span class="flag flag-g2000" title="Forbes Global 2000 rank #278">G2000 #278</span></td>
+              <td class="r-cc">US</td>
+              <td class="r-rev">$46.3B</td>
+              <td class="r-emp">78K</td>
+              <td class="r-rev r-itspend">$928M</td>
+              <td class="r-rev r-devspend">$149M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">82</td>
+              <td class="r-fni">85</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>80</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">20</td>
+              <td class="r-name">ASUSTeK Computer Inc.  <span class="flag flag-g2000" title="Forbes Global 2000 rank #973">G2000 #973</span></td>
+              <td class="r-cc">TW</td>
+              <td class="r-rev">$22.0B</td>
+              <td class="r-emp">17K</td>
+              <td class="r-rev r-itspend">$2.0B</td>
+              <td class="r-rev r-devspend">$393M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">85</td>
+              <td class="r-fni">85</td>
+              <td class="r-fni">44</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>79</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">21</td>
+              <td class="r-name">Dexcom, Inc.  <span class="flag flag-g2000" title="Forbes Global 2000 rank #1519">G2000 #1519</span></td>
+              <td class="r-cc">US</td>
+              <td class="r-rev">$4.7B</td>
+              <td class="r-emp">11K</td>
+              <td class="r-rev r-itspend">$85M</td>
+              <td class="r-rev r-devspend">$14M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">88</td>
+              <td class="r-fni">56</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>77</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">22</td>
+              <td class="r-name">Medallia, Inc.</td>
+              <td class="r-cc">US</td>
+              <td class="r-rev">$750M</td>
+              <td class="r-emp">2K</td>
+              <td class="r-rev r-itspend">$88M</td>
+              <td class="r-rev r-devspend">$17M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">85</td>
+              <td class="r-fni">47</td>
+              <td class="r-fni">49</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">12</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>77</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">23</td>
+              <td class="r-name">Roche Holding AG  <span class="flag flag-g2000" title="Forbes Global 2000 rank #80">G2000 #80</span></td>
+              <td class="r-cc">CH</td>
+              <td class="r-rev">$73.8B</td>
+              <td class="r-emp">113K</td>
+              <td class="r-rev r-itspend">$3.3B</td>
+              <td class="r-rev r-devspend">$492M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Cloudflare Pages</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">80</td>
+              <td class="r-fni">66</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>76</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">24</td>
+              <td class="r-name">LEGO A/S</td>
+              <td class="r-cc">DK</td>
+              <td class="r-rev">$10.8B</td>
+              <td class="r-emp">27K</td>
+              <td class="r-rev r-itspend">$172M</td>
+              <td class="r-rev r-devspend">$28M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">70</td>
+              <td class="r-fni">77</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">12</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>75</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">25</td>
+              <td class="r-name">Novartis AG  <span class="flag flag-g2000" title="Forbes Global 2000 rank #100">G2000 #100</span></td>
+              <td class="r-cc">CH</td>
+              <td class="r-rev">$54.5B</td>
+              <td class="r-emp">75K</td>
+              <td class="r-rev r-itspend">$2.1B</td>
+              <td class="r-rev r-devspend">$312M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">69</td>
+              <td class="r-fni">78</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>75</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">26</td>
+              <td class="r-name">Huawei Investment &amp; Holding Co., Ltd.</td>
+              <td class="r-cc">CN</td>
+              <td class="r-rev">$122.3B</td>
+              <td class="r-emp">213K</td>
+              <td class="r-rev r-itspend">$813M</td>
+              <td class="r-rev r-devspend">$117M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Cloudflare Pages</span></td>
+              <td class="r-fni">75</td>
+              <td class="r-fni">85</td>
+              <td class="r-fni">52</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>75</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">27</td>
+              <td class="r-name">Itau Unibanco Holding S/A  <span class="flag flag-g2000" title="Forbes Global 2000 rank #82">G2000 #82</span></td>
+              <td class="r-cc">BR</td>
+              <td class="r-rev">$32.9B</td>
+              <td class="r-emp">92K</td>
+              <td class="r-rev r-itspend">$2.5B</td>
+              <td class="r-rev r-devspend">$464M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">94</td>
+              <td class="r-fni">63</td>
+              <td class="r-fni">30</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-A">A</span> <b>75</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">28</td>
+              <td class="r-name">DECATHLON</td>
+              <td class="r-cc">FR</td>
+              <td class="r-rev">$17.6B</td>
+              <td class="r-emp">101K</td>
+              <td class="r-rev r-itspend">$316M</td>
+              <td class="r-rev r-devspend">$49M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">97</td>
+              <td class="r-fni">17</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>74</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">29</td>
+              <td class="r-name">Falabella S.A.  <span class="flag flag-g2000" title="Forbes Global 2000 rank #1195">G2000 #1195</span></td>
+              <td class="r-cc">CL</td>
+              <td class="r-rev">$12.6B</td>
+              <td class="r-emp">80K</td>
+              <td class="r-rev r-itspend">$111M</td>
+              <td class="r-rev r-devspend">$19M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">89</td>
+              <td class="r-fni">81</td>
+              <td class="r-fni">4</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>74</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">30</td>
+              <td class="r-name">Globoforce Group plc</td>
+              <td class="r-cc">IE</td>
+              <td class="r-rev">$1.2B</td>
+              <td class="r-emp">1K</td>
+              <td class="r-rev r-itspend">$93M</td>
+              <td class="r-rev r-devspend">$14M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">87</td>
+              <td class="r-fni">74</td>
+              <td class="r-fni">23</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>74</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">31</td>
+              <td class="r-name">Telstra Group Limited  <span class="flag flag-g2000" title="Forbes Global 2000 rank #687">G2000 #687</span></td>
+              <td class="r-cc">AU</td>
+              <td class="r-rev">$15.2B</td>
+              <td class="r-emp">31K</td>
+              <td class="r-rev r-itspend">$1.7B</td>
+              <td class="r-rev r-devspend">$312M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">94</td>
+              <td class="r-fni">72</td>
+              <td class="r-fni">7</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>74</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">32</td>
+              <td class="r-name">Crypto.com</td>
+              <td class="r-cc">SG</td>
+              <td class="r-rev">$1.5B</td>
+              <td class="r-emp">2K</td>
+              <td class="r-rev r-itspend">$191M</td>
+              <td class="r-rev r-devspend">$36M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">89</td>
+              <td class="r-fni">75</td>
+              <td class="r-fni">20</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>74</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">33</td>
+              <td class="r-name">Cimpress plc</td>
+              <td class="r-cc">IE</td>
+              <td class="r-rev">$3.4B</td>
+              <td class="r-emp">15K</td>
+              <td class="r-rev r-itspend">$57M</td>
+              <td class="r-rev r-devspend">$9M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">83</td>
+              <td class="r-fni">40</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>73</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">34</td>
+              <td class="r-name">Experian plc</td>
+              <td class="r-cc">IE</td>
+              <td class="r-rev">$4.5B</td>
+              <td class="r-emp">17K</td>
+              <td class="r-rev r-itspend">$2M</td>
+              <td class="r-rev r-devspend">&lt;$1M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">62</td>
+              <td class="r-fni">86</td>
+              <td class="r-fni">86</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>73</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">35</td>
+              <td class="r-name">Loblaw Companies Limited</td>
+              <td class="r-cc">CA</td>
+              <td class="r-rev">$45.7B</td>
+              <td class="r-emp">220K</td>
+              <td class="r-rev r-itspend">$356M</td>
+              <td class="r-rev r-devspend">$60M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">89</td>
+              <td class="r-fni">70</td>
+              <td class="r-fni">13</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">13</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>72</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">36</td>
+              <td class="r-name">SOCIETE GENERALE  <span class="flag flag-g2000" title="Forbes Global 2000 rank #161">G2000 #161</span></td>
+              <td class="r-cc">FR</td>
+              <td class="r-rev">$30.6B</td>
+              <td class="r-emp">119K</td>
+              <td class="r-rev r-itspend">$1.5B</td>
+              <td class="r-rev r-devspend">$261M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">86</td>
+              <td class="r-fni">56</td>
+              <td class="r-fni">47</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>72</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">37</td>
+              <td class="r-name">Parkland Corporation  <span class="flag flag-g2000" title="Forbes Global 2000 rank #1813">G2000 #1813</span></td>
+              <td class="r-cc">CA</td>
+              <td class="r-rev">$20.7B</td>
+              <td class="r-emp">6K</td>
+              <td class="r-rev r-itspend">$302M</td>
+              <td class="r-rev r-devspend">$50M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">87</td>
+              <td class="r-fni">68</td>
+              <td class="r-fni">10</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text)">10</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>70</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">38</td>
+              <td class="r-name">DANONE  <span class="flag flag-g2000" title="Forbes Global 2000 rank #361">G2000 #361</span></td>
+              <td class="r-cc">FR</td>
+              <td class="r-rev">$30.7B</td>
+              <td class="r-emp">90K</td>
+              <td class="r-rev r-itspend">$493M</td>
+              <td class="r-rev r-devspend">$79M</td>
+              <td class="r-sig"><span class="sig">Netlify</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">55</td>
+              <td class="r-fni">70</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text)">10</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>69</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">39</td>
+              <td class="r-name">SHELL PLC  <span class="flag flag-g2000" title="Forbes Global 2000 rank #23">G2000 #23</span></td>
+              <td class="r-cc">GB</td>
+              <td class="r-rev">$266.9B</td>
+              <td class="r-emp">96K</td>
+              <td class="r-rev r-itspend">$3.7B</td>
+              <td class="r-rev r-devspend">$485M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">62</td>
+              <td class="r-fni">74</td>
+              <td class="r-fni">87</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>69</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">40</td>
+              <td class="r-name">BP P.L.C.  <span class="flag flag-g2000" title="Forbes Global 2000 rank #421">G2000 #421</span></td>
+              <td class="r-cc">GB</td>
+              <td class="r-rev">$189.3B</td>
+              <td class="r-emp">94K</td>
+              <td class="r-rev r-itspend">$2.8B</td>
+              <td class="r-rev r-devspend">$362M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">62</td>
+              <td class="r-fni">74</td>
+              <td class="r-fni">87</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>69</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">41</td>
+              <td class="r-name">Gorilla Logic, LLC</td>
+              <td class="r-cc">US</td>
+              <td class="r-rev">$100M</td>
+              <td class="r-emp">500</td>
+              <td class="r-rev r-itspend">$11M</td>
+              <td class="r-rev r-devspend">$2M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">57</td>
+              <td class="r-fni">83</td>
+              <td class="r-fni">10</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>69</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">42</td>
+              <td class="r-name">Economist Newspaper Ltd (The)</td>
+              <td class="r-cc">GB</td>
+              <td class="r-rev">$469M</td>
+              <td class="r-emp">2K</td>
+              <td class="r-rev r-itspend">$30M</td>
+              <td class="r-rev r-devspend">$4M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">68</td>
+              <td class="r-fni">69</td>
+              <td class="r-fni">22</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">12</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>68</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">43</td>
+              <td class="r-name">Photon Interactive UK</td>
+              <td class="r-cc">GB</td>
+              <td class="r-rev">$300M</td>
+              <td class="r-emp">4K</td>
+              <td class="r-rev r-itspend"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-rev r-devspend"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">61</td>
+              <td class="r-fni">85</td>
+              <td class="r-fni">21</td>
+              <td class="r-fni r-spend"><span style="color:var(--text-3)">0</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>67</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">44</td>
+              <td class="r-name">Nord Security</td>
+              <td class="r-cc">LT</td>
+              <td class="r-rev">$250M</td>
+              <td class="r-emp">1K</td>
+              <td class="r-rev r-itspend">$17M</td>
+              <td class="r-rev r-devspend">$3M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">68</td>
+              <td class="r-fni">95</td>
+              <td class="r-fni">0</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>66</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">45</td>
+              <td class="r-name">HOLLAND &amp; BARRETT INTERNATIONAL LIMITED</td>
+              <td class="r-cc">GB</td>
+              <td class="r-rev">$1.3B</td>
+              <td class="r-emp">9K</td>
+              <td class="r-rev r-itspend">$13M</td>
+              <td class="r-rev r-devspend">$2M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">commercetools</span></td>
+              <td class="r-fni">87</td>
+              <td class="r-fni">54</td>
+              <td class="r-fni">0</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text-3)">5</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>64</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">46</td>
+              <td class="r-name">Chemist Warehouse Group</td>
+              <td class="r-cc">AU</td>
+              <td class="r-rev">$910M</td>
+              <td class="r-emp">8K</td>
+              <td class="r-rev r-itspend">$8M</td>
+              <td class="r-rev r-devspend">$1M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">85</td>
+              <td class="r-fni">51</td>
+              <td class="r-fni">0</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text-3)">0</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>62</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">47</td>
+              <td class="r-name">Viseo</td>
+              <td class="r-cc">FR</td>
+              <td class="r-rev">$391M</td>
+              <td class="r-emp">3K</td>
+              <td class="r-rev r-itspend">$28M</td>
+              <td class="r-rev r-devspend">$4M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">68</td>
+              <td class="r-fni">62</td>
+              <td class="r-fni">7</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text)">6</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>62</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">48</td>
+              <td class="r-name">KIN AND CARTA PLC</td>
+              <td class="r-cc">GB</td>
+              <td class="r-rev">$244M</td>
+              <td class="r-emp">2K</td>
+              <td class="r-rev r-itspend">$21M</td>
+              <td class="r-rev r-devspend">$3M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">68</td>
+              <td class="r-fni">65</td>
+              <td class="r-fni">14</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">12</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>61</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">49</td>
+              <td class="r-name">Babbel GmbH</td>
+              <td class="r-cc">DE</td>
+              <td class="r-rev">$174M</td>
+              <td class="r-emp">519</td>
+              <td class="r-rev r-itspend">$14M</td>
+              <td class="r-rev r-devspend">$2M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">57</td>
+              <td class="r-fni">83</td>
+              <td class="r-fni">26</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>60</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">50</td>
+              <td class="r-name">Pleo Holding ApS</td>
+              <td class="r-cc">DK</td>
+              <td class="r-rev">$113M</td>
+              <td class="r-emp">848</td>
+              <td class="r-rev r-itspend">$8M</td>
+              <td class="r-rev r-devspend">$1M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">65</td>
+              <td class="r-fni">45</td>
+              <td class="r-fni">2</td>
+              <td class="r-fni r-spend"><span style="color:var(--need)">15</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text)">9</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>57</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">51</td>
+              <td class="r-name">MessageBird B.V.</td>
+              <td class="r-cc">NL</td>
+              <td class="r-rev">$604M</td>
+              <td class="r-emp">1K</td>
+              <td class="r-rev r-itspend">$43M</td>
+              <td class="r-rev r-devspend">$6M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">77</td>
+              <td class="r-fni">30</td>
+              <td class="r-fni">20</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text-3)">5</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>56</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">52</td>
+              <td class="r-name">Origin Energy Limited  <span class="flag flag-g2000" title="Forbes Global 2000 rank #1281">G2000 #1281</span></td>
+              <td class="r-cc">AU</td>
+              <td class="r-rev">$11.1B</td>
+              <td class="r-emp">5K</td>
+              <td class="r-rev r-itspend">$208M</td>
+              <td class="r-rev r-devspend">$24M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">60</td>
+              <td class="r-fni">70</td>
+              <td class="r-fni">12</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">12</span></td>
+              <td class="r-score"><span class="tier-pill t-B">B</span> <b>56</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">53</td>
+              <td class="r-name">Bergfreunde GmbH</td>
+              <td class="r-cc">DE</td>
+              <td class="r-rev">$295M</td>
+              <td class="r-emp">700</td>
+              <td class="r-rev r-itspend">$4M</td>
+              <td class="r-rev r-devspend">&lt;$1M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Contentful</span><span class="sig">Storyblok</span></td>
+              <td class="r-fni">60</td>
+              <td class="r-fni">71</td>
+              <td class="r-fni">0</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text-3)">3</span></td>
+              <td class="r-score"><span class="tier-pill t-C">C</span> <b>54</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">54</td>
+              <td class="r-name">Caudalie</td>
+              <td class="r-cc">FR</td>
+              <td class="r-rev">$106M</td>
+              <td class="r-emp">250</td>
+              <td class="r-rev r-itspend">$1M</td>
+              <td class="r-rev r-devspend">&lt;$1M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">49</td>
+              <td class="r-fni">38</td>
+              <td class="r-fni">8</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text-3)">0</span></td>
+              <td class="r-score"><span class="tier-pill t-C">C</span> <b>54</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">55</td>
+              <td class="r-name">Free Company, Ltd.</td>
+              <td class="r-cc">JP</td>
+              <td class="r-rev">$137M</td>
+              <td class="r-emp">1K</td>
+              <td class="r-rev r-itspend">$12M</td>
+              <td class="r-rev r-devspend">$2M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">AWS Amplify</span><span class="sig">Cloudflare Pages</span></td>
+              <td class="r-fni">62</td>
+              <td class="r-fni">56</td>
+              <td class="r-fni">0</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text-3)">0</span></td>
+              <td class="r-score"><span class="tier-pill t-C">C</span> <b>51</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">56</td>
+              <td class="r-name">Solace Corporation</td>
+              <td class="r-cc">CA</td>
+              <td class="r-rev">$100M</td>
+              <td class="r-emp">610</td>
+              <td class="r-rev r-itspend"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-rev r-devspend"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">50</td>
+              <td class="r-fni">68</td>
+              <td class="r-fni">17</td>
+              <td class="r-fni r-spend"><span style="color:var(--text-3)">0</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text)">9</span></td>
+              <td class="r-score"><span class="tier-pill t-C">C</span> <b>50</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">57</td>
+              <td class="r-name">RED COMMERCE LIMITED</td>
+              <td class="r-cc">GB</td>
+              <td class="r-rev">$110M</td>
+              <td class="r-emp">132</td>
+              <td class="r-rev r-itspend">&lt;$1M</td>
+              <td class="r-rev r-devspend">&lt;$1M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Contentful</span><span class="sig">Storyblok</span></td>
+              <td class="r-fni">17</td>
+              <td class="r-fni">85</td>
+              <td class="r-fni">4</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">15</span></td>
+              <td class="r-score"><span class="tier-pill t-C">C</span> <b>50</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">58</td>
+              <td class="r-name">Carleton University</td>
+              <td class="r-cc">CA</td>
+              <td class="r-rev">$609M</td>
+              <td class="r-emp">1K</td>
+              <td class="r-rev r-itspend">$25M</td>
+              <td class="r-rev r-devspend">$4M</td>
+              <td class="r-sig"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-fni">54</td>
+              <td class="r-fni">41</td>
+              <td class="r-fni">44</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text)">10</span></td>
+              <td class="r-score"><span class="tier-pill t-C">C</span> <b>49</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">59</td>
+              <td class="r-name">Humber College</td>
+              <td class="r-cc">CA</td>
+              <td class="r-rev">$418M</td>
+              <td class="r-emp">1K</td>
+              <td class="r-rev r-itspend">$38M</td>
+              <td class="r-rev r-devspend">$5M</td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">AWS Amplify</span></td>
+              <td class="r-fni">48</td>
+              <td class="r-fni">44</td>
+              <td class="r-fni">40</td>
+              <td class="r-fni r-spend"><span style="color:var(--text)">7</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--text-3)">3</span></td>
+              <td class="r-score"><span class="tier-pill t-C">C</span> <b>46</b></td>
+            </tr>
+            <tr>
+              <td class="r-num">60</td>
+              <td class="r-name">QA LIMITED</td>
+              <td class="r-cc">GB</td>
+              <td class="r-rev">$259M</td>
+              <td class="r-emp">2K</td>
+              <td class="r-rev r-itspend"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-rev r-devspend"><span style="color:var(--text-3)">—</span></td>
+              <td class="r-sig"><span class="sig">Next.js</span><span class="sig">Netlify</span><span class="sig">Contentful</span></td>
+              <td class="r-fni">41</td>
+              <td class="r-fni">73</td>
+              <td class="r-fni">10</td>
+              <td class="r-fni r-spend"><span style="color:var(--text-3)">0</span></td>
+              <td class="r-fni r-genai"><span style="color:var(--need)">12</span></td>
+              <td class="r-score"><span class="tier-pill t-C">C</span> <b>46</b></td>
+            </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col-legend">
+      <span><b>F</b> Fit (×55%)</span>
+      <span><b>N</b> Need (×30%)</span>
+      <span><b>I</b> Intent (×15%)</span>
+      <span><b>Dev Spend %</b> Dev+Cloud spend-share score /15</span>
+      <span><b>GenAI</b> GenAI maturity /15</span>
+      <span><b>IT Spend</b> HG estimated annual IT spend</span>
+      <span><b>Dev Spend</b> App-dev + cloud-services spend ($)</span>
+      <span><b style="color:#FFD23F">F500</b> Fortune 500 rank</span>
+      <span><b style="color:var(--need)">G2000</b> Forbes Global 2000 rank</span>
+    </div>
+
+    <div class="section-eyebrow" style="margin-top:26px;">How to read the scored columns</div>
+    <div class="score-defs">
+      <div class="score-def">
+        <div class="score-def-head"><span class="score-def-name">F · N · I</span><span class="score-def-max">0–100 each</span></div>
+        <p>The three composite scores behind every account: <b>Fit</b> (firmographic + budget similarity to the seed customers), <b>Need</b> (technographic + AI-stack alignment), and <b>Intent</b> (active research signals). They combine <b>55 / 30 / 15</b> into the final 0–100 score and tier.</p>
+      </div>
+      <div class="score-def">
+        <div class="score-def-head"><span class="score-def-name">Dev Spend %</span><span class="score-def-max">max 15 pts</span></div>
+        <p>A sub-score <b>inside Fit</b>. Measures the share of the account's IT budget spent on application development + cloud (PaaS / IaaS / cloud services). Higher share = more digitally-led = warmer. Scored: <b>0</b> (&lt;10% or no data) → <b>7</b> (10–25%) → <b>15</b> (25–45%, ideal) → <b>12</b> (45%+, likely a software firm itself). <b>Maximum 15.</b></p>
+      </div>
+      <div class="score-def">
+        <div class="score-def-head"><span class="score-def-name">GenAI</span><span class="score-def-max">max 15 pts</span></div>
+        <p>The <b>GenAI Maturity</b> sub-score <b>inside Need</b>. Measures the breadth of the account's adopted generative-AI stack — foundation-model APIs (OpenAI, Anthropic, Bedrock, Vertex…) plus AI application infrastructure (Pinecone, LangChain, Hugging Face, Databricks…). More of the stack adopted = more mature = warmer, since AI-building companies need fast frontends. <b>Maximum 15.</b></p>
+      </div>
+    </div>
+  </details>
+
+  <!-- ENABLE SALES -->
+  <details class="sample section-collapse" id="enable" open>
+    <summary class="sec-sum"><span class="section-eyebrow">Enable Sales · More use cases</span><span class="chev">›</span></summary>
+    <p class="es-intro"><b>What else sellers can do with HG data.</b> Beyond the pre-meeting brief, HG-powered context unlocks conversational, in-the-flow workflows that sellers actually use day-to-day.</p>
+
+    <a class="brief-cta" href="vercel-account-brief-netflix.html">
+      <span class="l">
+        <span class="k">Worked example · Pre-meeting brief</span>
+        <span class="t">Netflix Account Brief →</span>
+        <span class="d">A seller-ready brief generated from this ICTP — score, opportunities, spend, stack, buying centers, contacts, and outreach.</span>
+      </span>
+      <span class="go">Open brief ↗</span>
+    </a>
+
+    <div class="uc-grid">
+        <div class="uc-card">
+          <div class="uc-head"><span class="uc-title">"Why this account?" on demand</span></div>
+          <div class="uc-desc">Seller asks the agent why an account is prioritized — Sales Coach replies with the specific HG signals (intent surge, tech install, cloud-spend trend, leadership change, contract-renewal window) that pushed it up the list, with sources.</div>
+        </div>
+        <div class="uc-card">
+          <div class="uc-head"><span class="uc-title">In-context coaching</span></div>
+          <div class="uc-desc">Agent suggests discovery questions, objection handling, and value framing tied to the account's actual stack, industry pains, and recent moves — not generic talk tracks.</div>
+        </div>
+        <div class="uc-card">
+          <div class="uc-head"><span class="uc-title">Tailored outreach generation</span></div>
+          <div class="uc-desc">One click drafts personalized emails, LinkedIn messages, and call openers grounded in HG firmographic, technographic, and intent data so every touch references something real and recent.</div>
+        </div>
+        <div class="uc-card">
+          <div class="uc-head"><span class="uc-title">Trigger outreach sequences</span></div>
+          <div class="uc-desc">Push HG-enriched contacts straight into Outreach, Salesloft, or your sequencer of choice — with the right persona, role, and signal context already mapped to the cadence.</div>
+        </div>
+        <div class="uc-card new">
+          <div class="uc-head"><span class="uc-title">Contact discovery &amp; enrichment</span><span class="uc-badge">New HG offering</span></div>
+          <div class="uc-desc">Find the right buying-committee members via HG contact_search and contact_enrich — email, phone, title, and recent job changes — without leaving the agent.</div>
+        </div>
+        <div class="uc-card">
+          <div class="uc-head"><span class="uc-title">Account plan refresh</span></div>
+          <div class="uc-desc">Re-run the brief on a cadence (weekly, pre-QBR, post-earnings) to surface what changed: new intent topics, tech adds/drops, leadership moves, fresh filings — keeping account plans alive instead of static.</div>
+        </div>
+        <div class="uc-card">
+          <div class="uc-head"><span class="uc-title">Whitespace &amp; expansion signals</span></div>
+          <div class="uc-desc">For existing customers, surface adjacent products, new sites, M&amp;A activity, and tech gaps that map to Vercel's portfolio — feeding CS and AE expansion plays.</div>
+        </div>
+        <div class="uc-card">
+          <div class="uc-head"><span class="uc-title">Real-time competitive intel</span></div>
+          <div class="uc-desc">Detect competitor installs, displacement signals, and renewal windows so sellers walk in knowing exactly where they stand against incumbents.</div>
+        </div>
+    </div>
+  </details>
+
+  <!-- FOOTER -->
+  <footer class="footer" id="methodology">
+    <div class="footer-meta">HG Insights · vercel / vercel_enterprise_customer_lookalikes · 2026-06-29</div>
+  </footer>
+
+</div>
+</body>
+</html>
